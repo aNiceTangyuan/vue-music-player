@@ -1,22 +1,23 @@
 <template>
-  <div v-if="music" class="music-detail">
-    <h2>{{ music.name }}</h2>
-    <div style="margin-bottom:16px">
-      <label style="font-size:15px;">音质：</label>
-      <select v-model="selectedLevel" @change="fetchDetail" style="padding:4px 10px;font-size:15px;">
+  <div v-if="music" class="music-detail-card">
+    <img :src="music.cover" :alt="music.song" class="music-detail-cover" />
+    <h2 class="music-detail-title">{{ music.song }}</h2>
+    <div class="music-detail-meta">
+      <div class="music-detail-singer">歌手：{{ music.singer }}</div>
+      <div class="music-detail-album">专辑：{{ music.album }}</div>
+      <div class="music-detail-quality">音质：{{ music.quality }}</div>
+      <div class="music-detail-size">大小：{{ music.size || '未知' }}</div>
+    </div>
+    <div class="music-detail-select">
+      <label class="music-detail-label">音质：</label>
+      <select v-model="selectedLevel" @change="fetchDetail" class="music-detail-selectbox">
         <option v-for="item in levelOptions" :key="item.value" :value="item.value">{{ item.label }}</option>
       </select>
     </div>
-    <img :src="music.pic" :alt="music.name" class="cover" />
-    <div class="info">
-      <div>歌手：{{ music.ar_name }}</div>
-      <div>专辑：{{ music.al_name }}</div>
-      <div>音质：{{ music.level }}</div>
-      <div>大小：{{ music.size || '未知' }}</div>
-      <div><a :href="music.url" target="_blank">无损直链试听</a></div>
+    <div class="music-detail-audio">
+      <audio v-if="audioUrl" :src="audioUrl" controls class="music-detail-player" />
+      <div v-if="!audioUrl && !loading" class="music-detail-nourl">请选择音质获取试听链接</div>
     </div>
-    <audio v-if="audioUrl" :src="audioUrl" controls style="margin-top:10px;width:100%"></audio>
-    <div v-if="!audioUrl && !loading" style="color:#e74c3c;margin-top:20px">请选择音质获取试听链接</div>
     <div v-if="music.lyric" class="lyric-block">
       <h3>歌词</h3>
       <pre class="lyric">{{ music.lyric }}</pre>
@@ -28,7 +29,7 @@
 
 <script>
 
-import { fetchMusicDetailById } from '../api/music';
+import { searchMusicByIdVkeys } from '../api/music';
 
 export default {
   name: 'MusicDetail',
@@ -37,7 +38,7 @@ export default {
       music: null,
       loading: false,
       error: '',
-      selectedLevel: 'standard',
+      selectedLevel: 'exhigh',
       levelOptions: [
         { value: 'standard', label: '标准' },
         { value: 'exhigh', label: '极高' },
@@ -64,10 +65,11 @@ export default {
       this.loading = true;
       this.audioUrl = '';
       try {
-        const res = await fetchMusicDetailById(id, this.selectedLevel);
-        if (res.data && res.data.status === 200) {
-          this.music = res.data;
-          this.audioUrl = res.data.url || '';
+        const res = await searchMusicByIdVkeys(id, this.selectedLevel);
+        console.log('音乐详情结果:', res);
+        if (res.data && res.data.code === 200) {
+          this.music = res.data.data;
+          this.audioUrl = res.data.data.url || '';
         } else {
           this.error = res.data?.message || '未找到该音质的播放链接';
         }
@@ -87,13 +89,92 @@ export default {
 </script>
 
 <style scoped>
-.music-detail {
+/* 详情卡片美化，纵向布局 */
+.music-detail-card {
   max-width: 500px;
   margin: 40px auto;
-  padding: 24px;
-  border: 1px solid #eee;
-  border-radius: 12px;
+  padding: 32px 28px;
+  border-radius: 16px;
   background: #fff;
+  box-shadow: 0 2px 24px rgba(66,185,131,0.10);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.music-detail-cover {
+  width: 160px;
+  height: 160px;
+  object-fit: cover;
+  border-radius: 14px;
+  margin-bottom: 18px;
+  box-shadow: 0 2px 8px rgba(66,185,131,0.10);
+}
+.music-detail-title {
+  font-size: 26px;
+  font-weight: bold;
+  color: #2c3e50;
+  margin-bottom: 12px;
+  text-align: center;
+}
+.music-detail-meta {
+  width: 100%;
+  text-align: center;
+  margin-bottom: 16px;
+}
+.music-detail-singer {
+  font-size: 16px;
+  color: #42b983;
+  margin-bottom: 4px;
+}
+.music-detail-album {
+  font-size: 16px;
+  color: #369870;
+  margin-bottom: 4px;
+}
+.music-detail-quality, .music-detail-size {
+  font-size: 15px;
+  color: #888;
+  margin-bottom: 4px;
+}
+.music-detail-select {
+  width: 100%;
+  margin-bottom: 18px;
+  text-align: left;
+}
+.music-detail-label {
+  font-size: 16px;
+  margin-right: 8px;
+  color: #2c3e50;
+}
+.music-detail-selectbox {
+  padding: 7px 16px;
+  font-size: 16px;
+  border: none;
+  border-radius: 8px;
+  outline: none;
+  background: linear-gradient(90deg, #eafaf3 0%, #fff 100%);
+  box-shadow: 0 2px 8px rgba(66,185,131,0.08);
+  transition: box-shadow 0.2s, background 0.2s;
+  appearance: none;
+}
+.music-detail-selectbox:focus, .music-detail-selectbox:hover {
+  box-shadow: 0 4px 16px rgba(66,185,131,0.18);
+  background: linear-gradient(90deg, #369870 0%, #eafaf3 100%);
+}
+.music-detail-audio {
+  width: 100%;
+  margin-bottom: 18px;
+}
+.music-detail-player {
+  width: 100%;
+  margin-top: 10px;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(66,185,131,0.08);
+  background: #f8f8f8;
+}
+.music-detail-nourl {
+  color: #e74c3c;
+  margin-top: 20px;
   text-align: center;
 }
 .lyric-block {

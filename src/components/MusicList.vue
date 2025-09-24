@@ -1,19 +1,27 @@
 <template>
   <ul class="music-list">
-    <li v-for="item in list" :key="item.id" class="music-item" @click="goDetail(item.id)" style="cursor:pointer;">
-      <img :src="item.cover" :alt="item.song" class="cover" />
-      <div class="info">
+    <li v-for="item in list" :key="item.id" class="music-item">
+      <img :src="item.cover" :alt="item.song" class="cover" @click="goDetail(item.id)" style="cursor:pointer;" />
+      <div class="info" @click="goDetail(item.id)" style="cursor:pointer;flex:1;">
         <div class="song">{{ item.song }}</div>
         <div class="singer">歌手：{{ item.singer }}</div>
         <div class="album">专辑：{{ item.album }}</div>
         <div class="time">发行时间：{{ item.time || '未知' }}</div>
         <div class="quality">音质：{{ item.quality }}</div>
       </div>
+      <button class="fav-btn" :class="{ liked: isFavorite(item.id) }" @click.stop="toggleFavorite(item.id)">
+        <span v-if="isFavorite(item.id)">❤️</span>
+        <span v-else>🤍</span>
+      </button>
+      <button class="play-btn" @click.stop="playMusic(item.id)">▶️</button>
+      <audio v-if="audioMap[item.id]" :src="audioMap[item.id]" controls style="width:120px;margin-left:8px;vertical-align:middle"></audio>
     </li>
   </ul>
 </template>
 
 <script>
+import { fetchMusicDetailById } from '../api/music';
+
 export default {
   name: 'MusicList',
   props: {
@@ -22,44 +30,122 @@ export default {
       default: () => []
     }
   },
+  data() {
+    return {
+      favoriteIds: JSON.parse(localStorage.getItem('favoriteMusicIds') || '[]'),
+      audioMap: {} // {id: url}
+    };
+  },
   methods: {
     goDetail(id) {
-      this.$router.push({ path: `/music/${id}` });
+        this.$emit('go-detail', id);
+    },
+    isFavorite(id) {
+      return this.favoriteIds.includes(id);
+    },
+    toggleFavorite(id) {
+      const idx = this.favoriteIds.indexOf(id);
+      if (idx > -1) {
+        this.favoriteIds.splice(idx, 1);
+      } else {
+        this.favoriteIds.push(id);
+      }
+      localStorage.setItem('favoriteMusicIds', JSON.stringify(this.favoriteIds));
+      this.$emit('favorite-change', this.favoriteIds);
+    },
+    async playMusic(id) {
+      const res = await fetchMusicDetailById(id, 'exhigh');
+      if (res.data && res.data.status === 200 && res.data.url) {
+        this.audioMap[id] = res.data.url;
+      } else {
+        this.audioMap[id] = '';
+      }
     }
   }
 };
 </script>
 
 <style scoped>
-.music-list {
-  list-style: none;
-  padding: 0;
-  margin: 0 auto;
-  max-width: 600px;
+.play-btn {
+  background: #fff;
+  color: #42b983;
+  border: 1.5px solid #42b983;
+  border-radius: 6px;
+  padding: 2px 10px;
+  font-size: 18px;
+  margin-left: 8px;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
 }
-.music-item {
-  display: flex;
-  align-items: center;
-  border-bottom: 1px solid #eee;
-  padding: 16px 0;
+.play-btn:hover {
+  background: #42b983;
+  color: #fff;
 }
-.cover {
-  width: 80px;
-  height: 80px;
-  object-fit: cover;
-  border-radius: 8px;
-  margin-right: 20px;
+ .music-list {
+   list-style: none;
+   padding: 0;
+   margin: 0 auto;
+   max-width: 700px;
+ }
+ .music-item {
+   display: flex;
+   align-items: center;
+   background: #fff;
+   border-radius: 16px;
+   box-shadow: 0 2px 16px rgba(66,185,131,0.08);
+   margin-bottom: 18px;
+   padding: 18px 24px;
+   transition: box-shadow 0.2s, transform 0.2s;
+   border: none;
+ }
+ .music-item:hover {
+   box-shadow: 0 6px 32px rgba(66,185,131,0.18);
+   transform: translateY(-2px) scale(1.01);
+ }
+ .cover {
+   width: 80px;
+   height: 80px;
+   object-fit: cover;
+   border-radius: 12px;
+   margin-right: 24px;
+   box-shadow: 0 2px 8px rgba(66,185,131,0.10);
+ }
+ .info {
+   text-align: left;
+   flex: 1;
+ }
+ .song {
+   font-size: 22px;
+   font-weight: bold;
+   color: #2c3e50;
+   margin-bottom: 6px;
+ }
+ .singer {
+   font-size: 15px;
+   color: #42b983;
+   margin-top: 2px;
+ }
+ .album {
+   font-size: 15px;
+   color: #369870;
+   margin-top: 2px;
+ }
+ .time, .quality {
+   font-size: 14px;
+   color: #888;
+   margin-top: 2px;
+ }
+.fav-btn {
+  background: none;
+  border: none;
+  font-size: 26px;
+  margin-left: 12px;
+  cursor: pointer;
+  outline: none;
+  transition: transform 0.1s;
 }
-.info {
-  text-align: left;
-}
-.song {
-  font-size: 20px;
-  font-weight: bold;
-}
-.singer, .album, .time, .quality {
-  font-size: 14px;
-  color: #666;
-  margin-top: 4px;
+.fav-btn.liked {
+  color: #e74c3c;
+  transform: scale(1.15);
 }
 </style>
