@@ -1,17 +1,8 @@
 module.exports = {
+  publicPath: process.env.NODE_ENV === 'production' ? '/vue-music-player/' : '/',
   transpileDependencies: [],
   configureWebpack: {
     resolve: {
-      // fallback: {
-      //   url: false,
-      //   http: false,
-      //   https: false,
-      //   stream: false,
-      //   zlib: false,
-      //   assert: false,
-      //   util: false,
-      //   os: false,
-      // }
     }
   }
 }
