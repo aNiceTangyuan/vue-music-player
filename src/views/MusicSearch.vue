@@ -6,8 +6,8 @@
     </div>
     <div class="search-bar">
       <select v-model="searchType" class="search-type-select">
-        <option value="word">关键词</option>
-        <option value="id">ID</option>
+        <option value="word">歌曲名字</option>
+        <option value="id">ID/链接</option>
       </select>
       <input
         v-model="searchInput"
@@ -21,20 +21,30 @@
     <div v-if="error" class="error">{{ error }}</div>
   <MusicList v-if="results.length" :list="results" @go-detail="handleGoDetail" />
     <div v-if="resultById">
-      <div class="detail-card">
-        <img :src="resultById.cover" :alt="resultById.song" class="detail-cover" />
-        <div class="detail-info">
-          <div class="detail-song">{{ resultById.song }}</div>
-          <div class="detail-singer">歌手：{{ resultById.singer }}</div>
-          <div class="detail-album">专辑：{{ resultById.album }}</div>
-          <div class="detail-time">发行时间：{{ resultById.time || '未知' }}</div>
-          <div class="detail-quality">音质：{{ resultById.quality }}</div>
-          <div class="detail-interval">时长：{{ resultById.interval || '未知' }}</div>
-          <div class="detail-size">大小：{{ resultById.size || '未知' }}</div>
-          <div class="detail-kbps">码率：{{ resultById.kbps || '未知' }}</div>
+  <div class="detail-card detail-card-fancy" @click="handleGoDetail(resultById.id)">
+        <img :src="resultById.cover" :alt="resultById.song" class="detail-cover detail-cover-fancy" />
+        <div class="detail-info detail-info-fancy">
+          <div class="detail-song detail-song-fancy">{{ resultById.song }}</div>
+          <div class="detail-meta-row">
+            <span class="detail-singer">歌手：{{ resultById.singer }}</span>
+            <span class="detail-album">专辑：{{ resultById.album }}</span>
+          </div>
+          <div class="detail-meta-row">
+            <span class="detail-time">发行时间：{{ resultById.time || '未知' }}</span>
+            <span class="detail-quality">音质：{{ resultById.quality }}</span>
+          </div>
+          <div class="detail-meta-row">
+            <span class="detail-interval">时长：{{ resultById.interval || '未知' }}</span>
+            <span class="detail-size">大小：{{ resultById.size || '未知' }}</span>
+            <span class="detail-kbps">码率：{{ resultById.kbps || '未知' }}</span>
+          </div>
           <div class="detail-link"><a :href="resultById.link" target="_blank">网易云播放页</a></div>
+          <button class="fav-btn fancy-fav-btn" :class="{ liked: isFavorite(resultById.id) }" @click.stop="toggleFavorite(resultById.id)">
+            <span v-if="isFavorite(resultById.id)">❤️ 已收藏</span>
+            <span v-else>🤍 收藏</span>
+          </button>
           <div v-if="resultById.url" class="detail-audio">
-            <audio :src="resultById.url" controls style="width:100%;margin-top:12px;border-radius:8px;box-shadow:0 2px 8px rgba(66,185,131,0.08);background:#f8f8f8;" />
+            <audio :src="resultById.url" controls class="audio-player-fancy" />
           </div>
         </div>
       </div>
@@ -55,6 +65,7 @@ export default {
   },
   data() {
     return {
+      favoriteIds: JSON.parse(localStorage.getItem('favoriteMusicIds') || '[]'),
       searchType: 'word',
       searchInput: '',
       results: [],
@@ -65,6 +76,7 @@ export default {
   },
   mounted() {
     // 挂载时恢复搜索状态
+    this.isFavorite()
     const state = localStorage.getItem('musicSearchState');
     if (state) {
       try {
@@ -79,9 +91,22 @@ export default {
     }
   },
   methods: {
+        isFavorite(id) {
+      return this.favoriteIds.includes(id);
+    },
+        toggleFavorite(id) {
+      const idx = this.favoriteIds.indexOf(id);
+      if (idx > -1) {
+        this.favoriteIds.splice(idx, 1);
+      } else {
+        this.favoriteIds.push(id);
+      }
+      localStorage.setItem('favoriteMusicIds', JSON.stringify(this.favoriteIds));
+      this.$emit('favorite-change', this.favoriteIds);
+    },
     async handleSearchUnified() {
       if (!this.searchInput.trim()) {
-        this.error = this.searchType === 'word' ? '请输入关键词' : '请输入歌曲ID';
+        this.error = this.searchType === 'word' ? '请输入关键词' : '请输入歌曲ID或链接';
         this.results = [];
         this.resultById = null;
         return;
@@ -100,8 +125,14 @@ export default {
             this.results = [];
           }
         } else {
-          const res = await searchMusicByIdVkeys(this.searchInput);
-          console.log('ID搜索结果:', res);
+          // 支持输入网易云链接，自动提取id
+          let id = this.searchInput.trim();
+          const linkMatch = id.match(/id=(\d+)/);
+          if (linkMatch) {
+            id = linkMatch[1];
+          }
+          const res = await searchMusicByIdVkeys(id);
+          console.log('ID/链接搜索结果:', res);
           if (res.data && res.data.code === 200 && res.data.data) {
             this.resultById = res.data.data;
           } else {
@@ -125,6 +156,7 @@ export default {
         results: this.results,
         resultById: this.resultById
       }));
+      console.log(this.searchType)
       this.$router.push({ path: `/music/${id}` });
     }
     }
@@ -133,7 +165,72 @@ export default {
 </script>
 
 <style scoped>
-/* 详情卡片美化 */
+.detail-card-fancy {
+  background: linear-gradient(120deg, #eafaf3 0%, #fff 100%);
+  border-radius: 20px;
+  box-shadow: 0 4px 24px rgba(66,185,131,0.13);
+  padding: 36px 44px;
+  max-width: 720px;
+  margin: 40px auto 32px auto;
+  transition: box-shadow 0.2s;
+}
+.detail-cover-fancy {
+  width: 140px;
+  height: 140px;
+  border-radius: 16px;
+  margin-right: 44px;
+  box-shadow: 0 6px 24px rgba(66,185,131,0.13);
+}
+.detail-info-fancy {
+  gap: 8px;
+  display: flex;
+  flex-direction: column;
+}
+.detail-song-fancy {
+  font-size: 30px;
+  font-weight: bold;
+  color: #2c3e50;
+  margin-bottom: 12px;
+  letter-spacing: 1.5px;
+}
+.detail-meta-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  margin-bottom: 2px;
+  font-size: 16px;
+  color: #369870;
+}
+.fancy-fav-btn {
+  margin-top: 16px;
+  padding: 8px 22px;
+  font-size: 17px;
+  border: none;
+  border-radius: 10px;
+  background: linear-gradient(90deg, #eafaf3 0%, #fff 100%);
+  color: #42b983;
+  box-shadow: 0 2px 8px rgba(66,185,131,0.08);
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s, box-shadow 0.2s;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.fancy-fav-btn.liked {
+  background: linear-gradient(90deg, #42b983 0%, #eafaf3 100%);
+  color: #e74c3c;
+}
+.fancy-fav-btn:hover {
+  background: linear-gradient(90deg, #42b983 0%, #eafaf3 100%);
+  color: #e67e22;
+}
+.audio-player-fancy {
+  width: 100%;
+  margin-top: 10px;
+  border-radius: 10px;
+  box-shadow: 0 2px 8px rgba(66,185,131,0.08);
+  background: #f8f8f8;
+}
 .detail-card {
   display: flex;
   align-items: center;

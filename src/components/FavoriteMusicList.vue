@@ -1,6 +1,6 @@
 <template>
   <ul class="fav-music-list">
-    <li v-for="item in list" :key="item.url || item.id" class="fav-music-item">
+    <li v-for="(item, index) in list" :key="item.url || item.id" class="fav-music-item">
       <img :src="item.pic || item.cover" :alt="item.name || item.song" class="fav-cover" />
       <div class="fav-info">
         <div class="fav-song">{{ item.name || item.song }}</div>
@@ -8,7 +8,16 @@
         <div class="fav-album">专辑：{{ item.al_name || item.album }}</div>
         <div class="fav-quality">音质：{{ item.quality }}</div>
 <div class="fav-audio-row">
-  <audio v-if="item.url" :src="item.url" controls class="fav-audio-player" />
+  <audio
+    v-if="item.url"
+    :src="item.url"
+    controls
+    class="fav-audio-player"
+    ref="audioRefs"
+    :autoplay="currentPlaying === index"
+    @ended="playNext(index)"
+    @play="currentPlaying = index"
+  />
   <button class="unfav-btn" @click="removeFavorite(item.id)">❤️</button>
 </div>
       </div>
@@ -40,15 +49,9 @@ export default {
         { value: 'jymaster', label: '超清母带' }
       ],
       audioLevels: {}, // {id: level}
-      audioUrls: {}    // {id: url}
+      audioUrls: {},    // {id: url}
+      currentPlaying: null, // 当前播放的索引
     };
-  },
-  mounted() {
-    // 默认全部用exhigh音质，但不自动请求播放 url
-    this.list.forEach(item => {
-      this.audioLevels[item.id] = 'exhigh';
-      this.audioUrls[item.id] = '';
-    });
   },
   methods: {
     async fetchAudio(id) {
@@ -61,6 +64,18 @@ export default {
         this.audioUrls[id] = '';
       }
     },
+        playNext(index) {
+      // 自动播放下一首
+      if (index < this.list.length - 1) {
+        this.currentPlaying = index + 1;
+        this.$nextTick(() => {
+          const nextAudio = this.$refs.audioRefs[index + 1];
+          if (nextAudio) nextAudio.play();
+        });
+      } else {
+        this.currentPlaying = null;
+      }
+    },
         removeFavorite(id) {
           let ids = JSON.parse(localStorage.getItem('favoriteMusicIds') || '[]');
           ids = ids.filter(favId => favId !== id);
@@ -68,8 +83,6 @@ export default {
           this.$emit('refresh');
         }
   },
-
-  
 };
 </script>
 

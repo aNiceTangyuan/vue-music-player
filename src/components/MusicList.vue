@@ -20,7 +20,7 @@
 </template>
 
 <script>
-import { fetchMusicDetailById } from '../api/music';
+import { searchMusicByIdVkeys } from '../api/music';
 
 export default {
   name: 'MusicList',
@@ -54,9 +54,11 @@ export default {
       this.$emit('favorite-change', this.favoriteIds);
     },
     async playMusic(id) {
-      const res = await fetchMusicDetailById(id, 'exhigh');
-      if (res.data && res.data.status === 200 && res.data.url) {
-        this.audioMap[id] = res.data.url;
+      const res = await searchMusicByIdVkeys(id);
+      console.log(res)
+      if (res.data && res.data.code === 200 && res.data.data.url) {
+        this.audioMap[id] = res.data.data.url;
+        console.log('播放音乐URL:', this.audioMap[id]);
       } else {
         this.audioMap[id] = '';
       }

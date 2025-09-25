@@ -10,8 +10,8 @@
     </div>
     <div class="music-detail-select">
       <label class="music-detail-label">音质：</label>
-      <select v-model="selectedLevel" @change="fetchDetail" class="music-detail-selectbox">
-        <option v-for="item in levelOptions" :key="item.value" :value="item.value">{{ item.label }}</option>
+      <select v-model="selectedQuality" @change="fetchAndPlay" class="music-detail-selectbox">
+        <option v-for="item in qualityOptions" :key="item.value" :value="item.value">{{ item.label }}</option>
       </select>
     </div>
     <div class="music-detail-audio">
@@ -38,21 +38,23 @@ export default {
       music: null,
       loading: false,
       error: '',
-      selectedLevel: 'exhigh',
-      levelOptions: [
-        { value: 'standard', label: '标准' },
-        { value: 'exhigh', label: '极高' },
-        { value: 'lossless', label: '无损' },
-        { value: 'hires', label: 'Hi-Res' },
-        { value: 'jyeffect', label: '高清环绕' },
-        { value: 'sky', label: '沉浸环绕' },
-        { value: 'jymaster', label: '超清母带' }
+      selectedQuality: 4, // 默认320k
+      qualityOptions: [
+        { value: 1, label: '	标准（64k）' },
+        { value: 2, label: '标准（128k）' },
+        { value: 3, label: 'HQ极高（192k）' },
+        { value: 4, label: '	HQ极高（320k）' },
+        { value: 5, label: 'SQ无损' },
+        { value: 6, label: '高解析度无损（Hi-Res）' },
+        { value: 7, label: '	高清臻音（Spatial Autio）' },
+        { value: 8, label: '	沉浸环绕声（Surround Autio）' },
+        { value: 9, label: '超清母带（Master）' }
       ],
       audioUrl: '',
     };
   },
   async created() {
-    await this.fetchAndPlay();
+  await this.fetchAndPlay();
   },
   methods: {
     // 选择音质后自动请求
@@ -65,7 +67,7 @@ export default {
       this.loading = true;
       this.audioUrl = '';
       try {
-        const res = await searchMusicByIdVkeys(id, this.selectedLevel);
+        const res = await searchMusicByIdVkeys(id, this.selectedQuality);
         console.log('音乐详情结果:', res);
         if (res.data && res.data.code === 200) {
           this.music = res.data.data;
@@ -81,7 +83,7 @@ export default {
     }
   },
   watch: {
-    selectedLevel() {
+    selectedQuality() {
       this.fetchAndPlay();
     }
   }
