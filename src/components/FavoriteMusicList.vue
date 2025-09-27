@@ -7,19 +7,21 @@
         <div class="fav-singer">歌手：{{ item.ar_name || item.singer }}</div>
         <div class="fav-album">专辑：{{ item.al_name || item.album }}</div>
         <div class="fav-quality">音质：{{ item.quality }}</div>
-<div class="fav-audio-row">
-  <audio
-    v-if="item.url"
-    :src="item.url"
-    controls
-    class="fav-audio-player"
-    ref="audioRefs"
-    :autoplay="currentPlaying === index"
-    @ended="playNext(index)"
-    @play="currentPlaying = index"
-  />
-  <button class="unfav-btn" @click="removeFavorite(item.id)">❤️</button>
-</div>
+          <div class="fav-audio-row">
+            <button class="play-btn" @click="playGlobal(item, index)">▶️ 播放</button>
+            <audio
+              v-if="item.url"
+              :src="item.url"
+              controls
+              class="fav-audio-player"
+              :autoplay="currentPlaying === index"
+              @ended="playNext(index)"
+              @play="currentPlaying = index"
+              ref="audioRefs"
+              style="display:none;"
+            />
+            <button class="unfav-btn" @click="removeFavorite(item.id)">❤️</button>
+          </div>
       </div>
     </li>
   </ul>
@@ -27,7 +29,7 @@
 </template>
 
 <script>
-import { searchMusicByIdVkeys } from '../api/music';
+// import { searchMusicByIdVkeys } from '../api/music';
 
 export default {
   name: 'FavoriteMusicList',
@@ -54,24 +56,40 @@ export default {
     };
   },
   methods: {
-    async fetchAudio(id) {
-      // 只有切换音质或播放时才用 bugpk 获取 url
-      const res = await searchMusicByIdVkeys(id);
-      console.log(res)
-      if (res.data && res.data.status === 200 && res.data.url) {
-        this.audioUrls[id] = res.data.url;
-      } else {
-        this.audioUrls[id] = '';
-      }
+    playGlobal(item) {
+      // 触发全局播放器播放
+      this.$root.player = {
+        url: item.url,
+        song: item.name || item.song,
+        singer: item.singer || item.ar_name,
+        cover: item.cover || item.pic,
+        album: item.album || item.al_name,
+        quality: item.quality,
+        size: item.size,
+        interval: item.interval,
+        kbps: item.kbps,
+        id: item.id
+      };
     },
-        playNext(index) {
+    // async fetchAudio(id) {
+    //   // 只有切换音质或播放时才用 bugpk 获取 url
+    //   const res = await searchMusicByIdVkeys(id);
+    //   console.log(res)
+    //   if (res.data && res.data.status === 200 && res.data.url) {
+    //     this.audioUrls[id] = res.data.url;
+    //   } else {
+    //     this.audioUrls[id] = '';
+    //   }
+    // },
+    playNext(index) {
       // 自动播放下一首
       if (index < this.list.length - 1) {
         this.currentPlaying = index + 1;
-        this.$nextTick(() => {
-          const nextAudio = this.$refs.audioRefs[index + 1];
-          if (nextAudio) nextAudio.play();
-        });
+        // 触发全局播放器切歌
+        const nextItem = this.list[index + 1];
+        if (nextItem) {
+          this.playGlobal(nextItem, index + 1);
+        }
       } else {
         this.currentPlaying = null;
       }

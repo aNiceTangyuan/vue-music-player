@@ -15,7 +15,11 @@
       </select>
     </div>
     <div class="music-detail-audio">
-      <audio v-if="audioUrl" :src="audioUrl" controls class="music-detail-player" />
+
+      <!-- 播放按钮 -->
+       <button @click="playGlobal">播放</button>
+
+      <!-- <audio v-if="audioUrl" :src="audioUrl" controls class="music-detail-player" /> -->
       <div v-if="!audioUrl && !loading" class="music-detail-nourl">请选择音质获取试听链接</div>
     </div>
     <div v-if="music.lyric" class="lyric-block">
@@ -80,13 +84,19 @@ export default {
       } finally {
         this.loading = false;
       }
-    }
+
+    },
+    playGlobal() {
+      if (this.music && this.music.url) {
+        this.$root.player = { ...this.music };
+      }
   },
   watch: {
     selectedQuality() {
       this.fetchAndPlay();
     }
   }
+}
 };
 </script>
 
