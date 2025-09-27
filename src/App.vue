@@ -7,7 +7,7 @@
     :title="player.song"
     :artist="player.singer"
     :cover="player.cover"
-    @ended="onPlayerEnded"
+              @ended="playNext"
   />
 </template>
 
@@ -33,14 +33,32 @@ export default {
       }
     };
   },
-  methods: {
-    // 可根据需要扩展全局播放器事件
-    onPlayerEnded() {
-      // 这里可实现自动播放下一首等逻辑
-    },
-    
-    
+methods: {
+  playNext() {
+    const player = this.$root.player;
+    if (!player || !player.playList) return;
+
+    const nextIndex = player.playIndex + 1;
+    if (nextIndex < player.playList.length) {
+      const nextItem = player.playList[nextIndex];
+      this.$root.player = {
+        ...player,
+        url: nextItem.url,
+        song: nextItem.name || nextItem.song,
+        singer: nextItem.singer || nextItem.ar_name,
+        cover: nextItem.cover || nextItem.pic,
+        album: nextItem.album || nextItem.al_name,
+        id: nextItem.id,
+        playIndex: nextIndex,
+        playList: player.playList
+      };
+    } else {
+      // 播完最后一首，清空
+      this.$root.player = null;
+    }
   }
+}
+
 }
 </script>
 

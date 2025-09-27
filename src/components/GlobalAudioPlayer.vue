@@ -7,7 +7,12 @@
         <div class="player-artist">{{ artist }}</div>
       </div>
     </div>
-    <audio ref="audio" :src="src" controls @ended="onEnded" @play="onPlay" @pause="onPause" />
+    <audio ref="audio" 
+    :src="src" 
+    controls 
+    @ended="onEnded" 
+    @play="onPlay" 
+    @pause="onPause" />
     <button class="player-close" @click="visible = false">✖</button>
   </div>
 </template>

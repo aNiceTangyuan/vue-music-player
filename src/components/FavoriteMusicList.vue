@@ -56,7 +56,7 @@ export default {
     };
   },
   methods: {
-    playGlobal(item) {
+    playGlobal(item, index) {
       // 触发全局播放器播放
       this.$root.player = {
         url: item.url,
@@ -68,7 +68,9 @@ export default {
         size: item.size,
         interval: item.interval,
         kbps: item.kbps,
-        id: item.id
+        id: item.id,
+            playIndex: index,           // 当前下标
+    playList: this.list         // 整个播放列表
       };
     },
     // async fetchAudio(id) {
