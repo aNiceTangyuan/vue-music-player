@@ -13,7 +13,7 @@
     @ended="onEnded" 
     @play="onPlay" 
     @pause="onPause" />
-    <button class="player-close" @click="visible = false">✖</button>
+    <button class="player-close">✖</button>
   </div>
 </template>
 

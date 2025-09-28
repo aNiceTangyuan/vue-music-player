@@ -1,6 +1,6 @@
 <template>
   <ul class="music-list">
-    <li v-for="item in list" :key="item.id" class="music-item">
+    <li v-for="(item, index) in list" :key="item.id" class="music-item">
       <img :src="item.cover" :alt="item.song" class="cover" @click="goDetail(item.id)" style="cursor:pointer;" />
       <div class="info" @click="goDetail(item.id)" style="cursor:pointer;flex:1;">
         <div class="song">{{ item.song }}</div>
@@ -13,8 +13,12 @@
         <span v-if="isFavorite(item.id)">❤️</span>
         <span v-else>🤍</span>
       </button>
-      <button class="play-btn" @click.stop="playMusic(item.id)">▶️</button>
-      <audio v-if="audioMap[item.id]" :src="audioMap[item.id]" controls style="width:120px;margin-left:8px;vertical-align:middle"></audio>
+      <button class="play-btn" @click="handlePlay(item, index)">▶️</button>
+      <audio
+       v-if="audioMap[item.id]" 
+       :src="audioMap[item.id]" 
+       controls
+        style="width:120px;margin-left:8px;vertical-align:middle;display: none;"></audio>
     </li>
   </ul>
 </template>
@@ -37,6 +41,53 @@ export default {
     };
   },
   methods: {
+        playGlobal(item, index, url) {
+      // 触发全局播放器播放
+      this.$root.player = {
+        url: url,
+        song: item.name || item.song,
+        singer: item.singer || item.ar_name,
+        cover: item.cover || item.pic,
+        album: item.album || item.al_name,
+        quality: item.quality,
+        size: item.size,
+        interval: item.interval,
+        kbps: item.kbps,
+        id: item.id,
+        playIndex: index,           // 当前下标
+        playList: this.list         // 整个播放列表
+      };
+    },
+      async handlePlay(item, index) {
+        console.log("触发",index)
+    // 先加载音乐 URL
+    const res = await searchMusicByIdVkeys(item.id);
+    let url = '';
+    if (res.data && res.data.code === 200 && res.data.data.url) {
+      url = res.data.data.url;
+      this.audioMap[item.id] = res.data.data.url;
+    } else {
+      this.audioMap[item.id] = '';
+    }
+
+    // 再触发全局播放
+    this.playGlobal(item, index, url);
+  },
+async playNext(index) {
+  console.log("触发了")
+  if (index < this.list.length - 1) {
+    const nextIndex = index + 1;
+    const nextItem = this.list[nextIndex];
+    if (nextItem) {
+      // ✅ 用 handlePlay 请求 url，再传给 playGlobal
+      await this.handlePlay(nextItem, nextIndex);
+    }
+  } else {
+    console.log("播放结束，已到最后一首");
+    this.$root.player = ""; // ✅ 停掉全局播放器
+  }
+},
+
     goDetail(id) {
         this.$emit('go-detail', id);
     },
@@ -53,17 +104,18 @@ export default {
       localStorage.setItem('favoriteMusicIds', JSON.stringify(this.favoriteIds));
       this.$emit('favorite-change', this.favoriteIds);
     },
-    async playMusic(id) {
-      const res = await searchMusicByIdVkeys(id);
-      console.log(res)
-      if (res.data && res.data.code === 200 && res.data.data.url) {
-        this.audioMap[id] = res.data.data.url;
-        console.log('播放音乐URL:', this.audioMap[id]);
-      } else {
-        this.audioMap[id] = '';
-      }
-    }
-  }
+    // async playMusic(id) {
+    //   const res = await searchMusicByIdVkeys(id);
+    //   console.log(res)
+    //   if (res.data && res.data.code === 200 && res.data.data.url) {
+    //     this.audioMap[id] = res.data.data.url;
+    //     console.log('播放音乐URL:', this.audioMap[id]);
+    //   } else {
+    //     this.audioMap[id] = '';
+    //   }
+    // }
+  },
+  
 };
 </script>
 
