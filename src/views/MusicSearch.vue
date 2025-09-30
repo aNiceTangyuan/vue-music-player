@@ -6,7 +6,7 @@
     </div>
     <div class="search-bar">
       <select v-model="searchType" class="search-type-select">
-        <option value="word">歌曲名字</option>
+        <option value="word">歌曲名字 ></option>
         <option value="id">ID/链接</option>
       </select>
       <input
@@ -19,7 +19,7 @@
     </div>
     <div v-if="loading">搜索中...</div>
     <div v-if="error" class="error">{{ error }}</div>
-  <MusicList v-if="results.length" :list="results" @go-detail="handleGoDetail" />
+  <MusicList v-if="results.length" :list="results" @go-detail="handleGoDetail" class="music-list"/>
     <div v-if="resultById">
   <div class="detail-card detail-card-fancy" @click="handleGoDetail(resultById.id)">
         <img :src="resultById.cover" :alt="resultById.song" class="detail-cover detail-cover-fancy" />
@@ -43,9 +43,9 @@
             <span v-if="isFavorite(resultById.id)">❤️ 已收藏</span>
             <span v-else>🤍 收藏</span>
           </button>
-          <div v-if="resultById.url" class="detail-audio">
+          <!-- <div v-if="resultById.url" class="detail-audio">
             <audio :src="resultById.url" controls class="audio-player-fancy" />
-          </div>
+          </div> -->
         </div>
       </div>
     </div>
@@ -165,6 +165,9 @@ export default {
 </script>
 
 <style scoped>
+.music-list {
+  animation: fadeInUp 0.7s;
+}
 .detail-card-fancy {
   background: linear-gradient(120deg, #eafaf3 0%, #fff 100%);
   border-radius: 20px;
@@ -173,6 +176,7 @@ export default {
   max-width: 720px;
   margin: 40px auto 32px auto;
   transition: box-shadow 0.2s;
+  animation: fadeInUp 0.7s;
 }
 .detail-cover-fancy {
   width: 140px;
@@ -224,12 +228,33 @@ export default {
   background: linear-gradient(90deg, #42b983 0%, #eafaf3 100%);
   color: #e67e22;
 }
+/* 美化搜索结果中的 audio 播放器 */
 .audio-player-fancy {
   width: 100%;
   margin-top: 10px;
-  border-radius: 10px;
-  box-shadow: 0 2px 8px rgba(66,185,131,0.08);
-  background: #f8f8f8;
+  border-radius: 14px;
+  box-shadow: 0 4px 16px rgba(66,185,131,0.13);
+  background: linear-gradient(90deg, #eafaf3 0%, #fff 100%);
+  border: 1px solid #eafaf3;
+  padding: 8px 0;
+  transition: box-shadow 0.2s, background 0.2s;
+}
+.audio-player-fancy:focus, .audio-player-fancy:hover {
+  box-shadow: 0 8px 32px rgba(66,185,131,0.18);
+  background: linear-gradient(90deg, #42b983 0%, #eafaf3 100%);
+}
+.detail-audio {
+  margin-top: 12px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+}
+@media (max-width: 700px) {
+  .audio-player-fancy {
+    border-radius: 10px;
+    padding: 4px 0;
+  }
 }
 .detail-card {
   display: flex;
@@ -286,11 +311,14 @@ export default {
 .detail-audio {
   margin-top: 12px;
 }
+/* 搜索页美化：增强布局、交互动画、响应式适配 */
 #music-search {
   font-family: Avenir, Helvetica, Arial, sans-serif;
   text-align: center;
   color: #2c3e50;
   margin-top: 40px;
+  min-height: 100vh;
+  background: linear-gradient(120deg, #eafaf3 0%, #fff 100%);
 }
 .search-header {
   display: flex;
@@ -299,28 +327,32 @@ export default {
   gap: 32px;
   margin: 0 auto 24px auto;
   max-width: 700px;
+  animation: fadeInDown 0.7s;
 }
 .search-title {
   margin: 0;
-  font-size: 2.2rem;
+  font-size: 2.4rem;
   font-weight: 700;
   letter-spacing: 2px;
+  color: #369870;
+  text-shadow: 0 2px 8px rgba(66,185,131,0.10);
 }
 .fav-list-btn {
   background: linear-gradient(90deg, #42b983 0%, #369870 100%);
   color: #fff;
   border: none;
   border-radius: 8px;
-  padding: 10px 28px;
-  font-size: 17px;
+  padding: 12px 32px;
+  font-size: 18px;
   font-weight: 500;
   cursor: pointer;
   box-shadow: 0 2px 8px rgba(66,185,131,0.08);
-  transition: background 0.2s, color 0.2s, box-shadow 0.2s;
+  transition: background 0.2s, color 0.2s, box-shadow 0.2s, transform 0.2s;
 }
 .fav-list-btn:hover {
   background: linear-gradient(90deg, #369870 0%, #42b983 100%);
   box-shadow: 0 4px 16px rgba(66,185,131,0.18);
+  transform: scale(1.05);
 }
 .search-bar {
   margin-bottom: 32px;
@@ -330,12 +362,13 @@ export default {
   background: linear-gradient(90deg, #eafaf3 0%, #f8f8f8 100%);
   border-radius: 12px;
   box-shadow: 0 2px 12px rgba(66,185,131,0.08);
-  padding: 18px 24px;
+  padding: 22px 28px;
   gap: 0;
+  animation: fadeInUp 0.7s;
 }
 .search-type-select {
-  padding: 10px 16px;
-  font-size: 17px;
+  padding: 12px 18px;
+  font-size: 18px;
   border: none;
   border-radius: 12px 0 0 12px;
   outline: none;
@@ -350,9 +383,9 @@ export default {
   background: linear-gradient(90deg, #369870 0%, #eafaf3 100%);
 }
 .search-input {
-  padding: 10px;
-  width: 260px;
-  font-size: 17px;
+  padding: 12px;
+  width: 280px;
+  font-size: 18px;
   border: none;
   border-radius: 0 12px 12px 0;
   outline: none;
@@ -360,9 +393,9 @@ export default {
   box-shadow: 0 2px 8px rgba(66,185,131,0.08);
 }
 .search-btn {
-  padding: 10px 24px;
-  margin-left: 12px;
-  font-size: 17px;
+  padding: 12px 28px;
+  margin-left: 14px;
+  font-size: 18px;
   background: linear-gradient(90deg, #42b983 0%, #369870 100%);
   color: #fff;
   border: none;
@@ -370,7 +403,35 @@ export default {
   cursor: pointer;
   font-weight: 500;
   box-shadow: 0 2px 8px rgba(66,185,131,0.08);
-  transition: background 0.2s, box-shadow 0.2s;
+  transition: background 0.2s, box-shadow 0.2s, transform 0.2s;
+}
+.search-btn:hover {
+  background: linear-gradient(90deg, #369870 0%, #42b983 100%);
+  box-shadow: 0 4px 16px rgba(66,185,131,0.18);
+  transform: scale(1.05);
+}
+@media (max-width: 700px) {
+  .search-header {
+    flex-direction: column;
+    gap: 18px;
+  }
+  .search-bar {
+    flex-direction: column;
+    gap: 12px;
+    padding: 16px 8px;
+  }
+  .search-input {
+    width: 100%;
+    min-width: 180px;
+  }
+}
+@keyframes fadeInDown {
+  from { opacity: 0; transform: translateY(-30px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(30px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 .search-type-select option {
   border-radius: 8px;

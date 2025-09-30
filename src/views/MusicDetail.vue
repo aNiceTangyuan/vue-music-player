@@ -86,17 +86,32 @@ export default {
       }
 
     },
-    playGlobal() {
-      if (this.music && this.music.url) {
-        this.$root.player = { ...this.music };
-      }
-  },
+playGlobal() {
+  if (this.music) {
+    // 从 MusicList.vue 拿到歌曲列表
+    const playList = this.$root.player.playList || this.$route.query.playList || []; 
+
+    // 找到当前歌曲在列表中的下标
+    const playIndex = playList.findIndex(item => item.id === this.music.id);
+
+    this.$root.player = {
+      ...this.$root.player,
+      ...this.music,
+      playList,           // 用 MusicList.vue 的 list
+      playIndex: playIndex !== -1 ? playIndex : 0
+    };
+  }
+}
+
+
+,
+
+},
   watch: {
     selectedQuality() {
       this.fetchAndPlay();
     }
   }
-}
 };
 </script>
 
@@ -114,68 +129,110 @@ export default {
   align-items: center;
 }
 .music-detail-cover {
-  width: 160px;
-  height: 160px;
+  width: 200px;
+  height: 200px;
   object-fit: cover;
-  border-radius: 14px;
-  margin-bottom: 18px;
-  box-shadow: 0 2px 8px rgba(66,185,131,0.10);
+  border-radius: 16px;
+  margin-bottom: 24px;
+  box-shadow: 0 8px 20px rgba(66,185,131,0.18);
+  transition: transform 0.3s, box-shadow 0.3s;
+}
+.music-detail-cover:hover {
+  transform: scale(1.05);
+  box-shadow: 0 12px 28px rgba(66,185,131,0.25);
 }
 .music-detail-title {
-  font-size: 26px;
+  font-size: 28px;
   font-weight: bold;
   color: #2c3e50;
-  margin-bottom: 12px;
+  margin-bottom: 16px;
   text-align: center;
+  text-shadow: 1px 1px 2px rgba(0,0,0,0.05);
 }
 .music-detail-meta {
   width: 100%;
   text-align: center;
-  margin-bottom: 16px;
+  margin-bottom: 20px;
+  padding: 10px 15px;
+  background: linear-gradient(90deg, #f8fcfa 0%, #fff 100%);
+  border-radius: 12px;
+  box-shadow: 0 2px 10px rgba(66,185,131,0.08);
 }
 .music-detail-singer {
   font-size: 16px;
   color: #42b983;
-  margin-bottom: 4px;
+  margin-bottom: 8px;
+  font-weight: 500;
 }
 .music-detail-album {
   font-size: 16px;
   color: #369870;
-  margin-bottom: 4px;
+  margin-bottom: 8px;
 }
 .music-detail-quality, .music-detail-size {
   font-size: 15px;
-  color: #888;
-  margin-bottom: 4px;
+  color: #666;
+  margin-bottom: 6px;
 }
 .music-detail-select {
   width: 100%;
-  margin-bottom: 18px;
-  text-align: left;
+  margin-bottom: 24px;
+  text-align: center;
+  display: flex;
+  justify-content: center;
+  align-items: center;
 }
 .music-detail-label {
   font-size: 16px;
-  margin-right: 8px;
+  margin-right: 10px;
   color: #2c3e50;
+  font-weight: 500;
 }
 .music-detail-selectbox {
-  padding: 7px 16px;
+  padding: 8px 20px;
   font-size: 16px;
   border: none;
-  border-radius: 8px;
+  border-radius: 10px;
   outline: none;
   background: linear-gradient(90deg, #eafaf3 0%, #fff 100%);
-  box-shadow: 0 2px 8px rgba(66,185,131,0.08);
-  transition: box-shadow 0.2s, background 0.2s;
+  box-shadow: 0 4px 12px rgba(66,185,131,0.12);
+  transition: all 0.3s ease;
+  cursor: pointer;
   appearance: none;
+  position: relative;
+  min-width: 180px;
+}
+.music-detail-selectbox option {
+  background-color: #f5fffa;
+  color: #2c3e50;
+  padding: 10px;
 }
 .music-detail-selectbox:focus, .music-detail-selectbox:hover {
-  box-shadow: 0 4px 16px rgba(66,185,131,0.18);
-  background: linear-gradient(90deg, #369870 0%, #eafaf3 100%);
+  box-shadow: 0 6px 18px rgba(66,185,131,0.25);
+  background: linear-gradient(90deg, #42b983 0%, #eafaf3 100%);
+  color: #fff;
 }
 .music-detail-audio {
   width: 100%;
-  margin-bottom: 18px;
+  margin-bottom: 24px;
+  display: flex;
+  justify-content: center;
+}
+.music-detail-audio button {
+  padding: 10px 30px;
+  font-size: 18px;
+  background: #42b983;
+  color: white;
+  border: none;
+  border-radius: 30px;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(66,185,131,0.25);
+  transition: all 0.3s ease;
+}
+.music-detail-audio button:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 20px rgba(66,185,131,0.35);
+  background: #369870;
 }
 .music-detail-player {
   width: 100%;

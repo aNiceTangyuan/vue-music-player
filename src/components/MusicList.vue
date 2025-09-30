@@ -88,9 +88,14 @@ async playNext(index) {
   }
 },
 
-    goDetail(id) {
-        this.$emit('go-detail', id);
-    },
+goDetail(id) {
+  this.$root.player = {
+    ...this.$root.player,
+    playList: this.list   // ✅ 把当前列表放到全局
+  };
+  this.$emit('go-detail', id);
+}
+,
     isFavorite(id) {
       return this.favoriteIds.includes(id);
     },
