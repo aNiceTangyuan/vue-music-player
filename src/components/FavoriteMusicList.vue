@@ -8,7 +8,7 @@
         <div class="fav-album">专辑：{{ item.al_name || item.album }}</div>
         <div class="fav-quality">音质：{{ item.quality }}</div>
           <div class="fav-audio-row">
-            <button class="play-btn" @click="playGlobal(item, index)">▶️ 播放</button>
+            <button class="play-btn" @click="playGlobal(item, index)"><van-icon name="play-circle-o" /> 播放</button>
             <audio
               v-if="item.url"
               :src="item.url"

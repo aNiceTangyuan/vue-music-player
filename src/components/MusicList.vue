@@ -13,7 +13,8 @@
         <span v-if="isFavorite(item.id)">❤️</span>
         <span v-else>🤍</span>
       </button>
-      <button class="play-btn" @click="handlePlay(item, index)">▶️</button>
+      <button class="play-btn" @click="handlePlay(item, index)">
+        <van-icon name="play-circle" /></button>
       <audio
        v-if="audioMap[item.id]" 
        :src="audioMap[item.id]" 

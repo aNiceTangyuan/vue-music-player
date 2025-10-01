@@ -14,12 +14,29 @@
         <div class="player-artist">{{ artist }}</div>
       </div>
     </div>
-    <audio ref="audio" 
-    :src="src" 
-    controls 
-    @ended="onEnded" 
-    @play="onPlay" 
-    @pause="onPause" />
+    <audio ref="audio"
+      :src="src"
+      style="display:none;"
+      @ended="onEnded"
+      @play="onPlay"
+      @pause="onPause"
+      @timeupdate="onTimeUpdate"
+    />
+    <div class="player-controls">
+      <button @click="togglePlay" class="player-btn" :disabled="!src">
+        <van-icon  v-if="isPlaying"  name="pause-circle-o" />
+        <van-icon  v-else  name="play-circle-o" />
+      </button>
+      <div class="player-progress">
+        <input type="range" min="0" :max="duration" step="0.1" v-model="currentTime" @input="seek" class="progress-bar" />
+        <span class="progress-time">{{ formatTime(currentTime) }} / {{ formatTime(duration) }}</span>
+      </div>
+      <div class="player-volume">
+        <van-icon name="volume-o" />
+        <input type="range" min="0" max="1" step="0.01" v-model="volume" @input="setVolume" class="volume-bar" />
+        <span class="volume-value">{{ Math.round(volume * 100) }}%</span>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -35,28 +52,73 @@ export default {
   },
   data() {
     return {
+      isPlaying: false,
+      currentTime: 0,
+      duration: 0,
+      volume: 1
     };
   },
   watch: {
     src(newVal) {
       if (newVal) {
         this.$nextTick(() => {
-          this.$refs.audio && this.$refs.audio.play();
+          const audio = this.$refs.audio;
+          if (audio) {
+            audio.currentTime = 0;
+            audio.volume = this.volume;
+            audio.play();
+          }
         });
       }
+    },
+    volume(val) {
+      const audio = this.$refs.audio;
+      if (audio) audio.volume = val;
     }
   },
   methods: {
+    togglePlay() {
+      const audio = this.$refs.audio;
+      if (!audio) return;
+      if (audio.paused) {
+        audio.play();
+      } else {
+        audio.pause();
+      }
+    },
     onEnded() {
+      this.isPlaying = false;
       this.$emit('ended');
     },
     onPlay() {
+      this.isPlaying = true;
       this.$emit('play');
     },
     onPause() {
+      this.isPlaying = false;
       this.$emit('pause');
     },
+    onTimeUpdate(e) {
+      const audio = e.target;
+      this.currentTime = audio.currentTime;
+      this.duration = audio.duration || 0;
+    },
+    seek() {
+      const audio = this.$refs.audio;
+      if (audio) audio.currentTime = Number(this.currentTime);
+    },
+    setVolume() {
+      const audio = this.$refs.audio;
+      if (audio) audio.volume = Number(this.volume);
+    },
+    formatTime(sec) {
+      sec = Math.floor(sec || 0);
+      const m = Math.floor(sec / 60);
+      const s = sec % 60;
+      return `${m}:${s < 10 ? '0' : ''}${s}`;
+    },
     navigateToDetail() {
+      console.log("1111")
       if (this.musicId) {
         this.$router.push(`/music/${this.musicId}`);
       }
@@ -66,7 +128,6 @@ export default {
 </script>
 
 <style scoped>
-/* 播放器控件美化：更现代的布局、渐变、阴影、动画 */
 .global-audio-player {
   position: fixed;
   left: 0;
@@ -91,6 +152,91 @@ export default {
   flex: 1;
   cursor: pointer;
   transition: transform 0.2s;
+  width: 200px;
+}
+
+.player-controls {
+  display: flex;
+  align-items: center;
+  gap: 32px;
+  flex: 2;
+  justify-content: flex-start;
+}
+  .player-btn {
+    background: #5d9a80;
+    border: none;
+    color: #fff;
+    border-radius: 50%;
+    width: 48px;
+    height: 48px;
+    font-size: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 8px rgba(66,185,131,0.12);
+    cursor: pointer;
+    transition: background 0.2s, transform 0.2s;
+    opacity: 1;
+  }
+  .player-btn:disabled {
+    background: #eafaf3;
+    color: #bbb;
+    cursor: not-allowed;
+    opacity: 0.6;
+  }
+  .player-btn:not(:disabled):hover {
+    background: linear-gradient(90deg, #369870 0%, #42b983 100%);
+    transform: scale(1.08);
+  }
+.icon-play::before {
+  content: '▶️';
+  font-size: 28px;
+}
+.icon-pause::before {
+  content: '⏸';
+  font-size: 28px;
+}
+.player-progress {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+}
+.progress-bar {
+  width: 180px;
+  height: 6px;
+  border-radius: 4px;
+  background: #eafaf3;
+  accent-color: #42b983;
+  outline: none;
+  margin-right: 8px;
+}
+.progress-time {
+  font-size: 13px;
+  color: #369870;
+  min-width: 80px;
+}
+.player-volume {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.icon-volume::before {
+  content: '\1F50A';
+  font-size: 20px;
+  color: #42b983;
+}
+.volume-bar {
+  width: 80px;
+  accent-color: #42b983;
+  background: #eafaf3;
+  border-radius: 4px;
+  outline: none;
+}
+.volume-value {
+  font-size: 13px;
+  color: #369870;
+  min-width: 36px;
 }
 
 .player-cover {
