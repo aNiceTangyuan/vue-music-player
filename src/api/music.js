@@ -17,14 +17,8 @@ export function searchMusic(word) {
   return instance.get('', { params: { word } });
 }
 
-// 新的音乐详情接口（bugpk）
-// export function fetchMusicDetailById(id, level = 'exhigh') {
-//   // type=json 返回json格式
-//   return axios.get('https://api.bugpk.com/api/163_music', {
-//     params: {
-//       ids: id,
-//       level,
-//       type: 'json'
-//     }
-//   });
-// }
+
+// 获取歌词接口
+export function fetchLyricById(id) {
+  return instance.get('/lyric', { params: { id } });
+}
