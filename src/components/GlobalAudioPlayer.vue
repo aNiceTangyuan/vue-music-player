@@ -10,14 +10,36 @@
     
     <div class="player-controls">
       <!-- 播放/暂停按钮 -->
-      <button class="control-btn play-pause-btn" @click="togglePlay">
-        <svg v-if="!isPlaying" viewBox="0 0 24 24" class="icon">
-          <path d="M8 5v14l11-7z" fill="currentColor"/>
-        </svg>
-        <svg v-else viewBox="0 0 24 24" class="icon">
-          <path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z" fill="currentColor"/>
-        </svg>
-      </button>
+  <!-- 上一首 -->
+  <button class="control-btn small-btn" 
+  @click="$emit('prev')"
+  :disabled="!src">
+    <svg viewBox="0 0 24 24" class="icon">
+      <path d="M6 12l10-7v14L6 12zm-2 7h2V5H4v14z" fill="currentColor"/>
+    </svg>
+  </button>
+
+  <!-- 播放/暂停按钮 -->
+  <button class="control-btn play-pause-btn" 
+  @click="togglePlay"
+  :disabled="!src">
+    <svg v-if="!isPlaying" viewBox="0 0 24 24" class="icon">
+      <path d="M8 5v14l11-7z" fill="currentColor"/>
+    </svg>
+    <svg v-else viewBox="0 0 24 24" class="icon">
+      <path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z" fill="currentColor"/>
+    </svg>
+  </button>
+
+  <!-- 下一首 -->
+  <button class="control-btn small-btn" 
+  @click="$emit('next')"
+  :disabled="!src">
+    <svg viewBox="0 0 24 24" class="icon">
+      <path d="M18 12L8 19V5l10 7zm2-7h-2v14h2V5z" fill="currentColor"/>
+    </svg>
+  </button>
+
       
       <!-- 进度条区域 -->
       <div class="progress-container">
@@ -208,6 +230,13 @@ export default {
 </script>
 
 <style scoped>
+.control-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none !important;
+  box-shadow: none !important;
+}
+
 .global-audio-player {
   position: fixed;
   left: 0;

@@ -43,9 +43,6 @@
             <span v-if="isFavorite(resultById.id)">❤️ 已收藏</span>
             <span v-else>🤍 收藏</span>
           </button>
-          <!-- <div v-if="resultById.url" class="detail-audio">
-            <audio :src="resultById.url" controls class="audio-player-fancy" />
-          </div> -->
         </div>
       </div>
     </div>
@@ -156,7 +153,6 @@ export default {
         results: this.results,
         resultById: this.resultById
       }));
-      console.log(this.searchType)
       this.$router.push({ path: `/music/${id}` });
     }
     }

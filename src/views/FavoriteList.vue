@@ -38,21 +38,36 @@ export default {
     this.fetchFavorites();
   },
   methods: {
-    async fetchFavorites() {
-      const ids = JSON.parse(localStorage.getItem('favoriteMusicIds') || '[]');
-      if (ids.length) {
-        const results = await Promise.all(ids.map(id => searchMusicByIdVkeys(id)));
-        let songs = [];
-        results.forEach(res => {
-          if (res.data && res.data.code === 200) {
-            songs = songs.concat(res.data.data);
-          }
-        });
-        this.favoriteSongs = songs;
+async fetchFavorites() {
+  const ids = JSON.parse(localStorage.getItem('favoriteMusicIds') || '[]');
+
+  // 带重试的请求函数
+  async function fetchWithRetry(id, maxRetries = 10) {
+    let attempt = 0;
+    while (attempt < maxRetries) {
+      const res = await searchMusicByIdVkeys(id);
+      if (res.data && res.data.code === 200) {
+        return res.data.data; // 成功返回
+      } else if (res.data && res.data.code === 503) {
+        attempt++;
+        if (attempt < maxRetries) {
+          console.warn(`id=${id} 第${attempt}次重试...`);
+        }
       } else {
-        this.favoriteSongs = [];
+        break; // 其他错误直接退出
       }
     }
+    return []; // 超过次数或失败返回空数组
+  }
+
+  if (ids.length) {
+    const results = await Promise.all(ids.map(id => fetchWithRetry(id)));
+    this.favoriteSongs = results.flat(); // 合并数组
+  } else {
+    this.favoriteSongs = [];
+  }
+}
+
   }
 };
 </script>

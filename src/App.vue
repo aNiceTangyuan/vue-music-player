@@ -11,6 +11,8 @@
     :musicId="player.id"
     @ended="playNext"
     @timeupdate="handleTimeUpdate"
+    @prev="playPrev"
+    @next="playNext"
   />
 </template>
 
@@ -47,9 +49,44 @@ export default {
             this.player.currentTime = currentTime;
           }
         },
+        async playPrev() {
+  const player = this.$root.player;
+  console.log('app 播放上一首');
+
+  const prevIndex = player.playIndex - 1;
+
+  if (prevIndex >= 0) {
+    const prevItem = player.playList[prevIndex];
+    try {
+      const res = await searchMusicByIdVkeys(prevItem.id);
+      if (res.data && res.data.code === 200 && res.data.data.url) {
+        this.$root.player = {
+          ...player,
+          url: res.data.data.url,
+          song: prevItem.song,
+          singer: prevItem.singer,
+          cover: prevItem.cover,
+          album: prevItem.album,
+          id: prevItem.id,
+          playIndex: prevIndex,
+          playList: player.playList
+        };
+      } else {
+        // url 获取失败
+        this.$root.player = null;
+      }
+    } catch (e) {
+      console.error('获取上一首url失败', e);
+      this.$root.player = null;
+    }
+  } else {
+    console.log('已经是第一首了');
+  }
+}
+,
         async playNext() {
           const player = this.$root.player;
-          console.log(player)
+          console.log('app 播放下一首')
           // if (!player || !player.playList || typeof player.playIndex !== 'number') return;
           const nextIndex = player.playIndex + 1;
           console.log("当前歌曲：", player.playList[0])

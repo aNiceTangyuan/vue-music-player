@@ -94,65 +94,106 @@ export default {
     this.scrollLyric();
   },
     // 选择音质后自动请求
-    async fetchAndPlay() {
-      const id = this.$route.params.id;
-      if (!id) {
-        this.error = '无效的歌曲ID';
-        return;
-      }
-      this.loading = true;
-      this.audioUrl = '';
-      try {
-        const res = await searchMusicByIdVkeys(id, this.selectedQuality);
-        if (res.data && res.data.code === 200) {
-          this.music = res.data.data;
-          this.audioUrl = res.data.data.url || '';
-        } else {
-          this.error = res.data?.message || '未找到该音质的播放链接';
-        }
-      } catch (e) {
-        this.error = '请求失败，请稍后重试';
-      } finally {
-        this.loading = false;
-      }
-    },
+async fetchAndPlay() {
+  const id = this.$route.params.id;
+  if (!id) {
+    this.error = '无效的歌曲ID';
+    return;
+  }
 
-    async fetchLyric() {
-      const id = this.$route.params.id;
-      if (!id) return;
-      try {
-        const res = await fetchLyricById(id);
-        if (res.data && res.data.code === 200) {
-          this.lyric = res.data.data.lrc || '';
-          this.parsedLyric = this.parseLRC(this.lyric);
+  this.loading = true;
+  this.audioUrl = '';
+
+  let attempts = 0;
+  const maxAttempts = 10;
+
+  while (attempts < maxAttempts) {
+    try {
+      const res = await searchMusicByIdVkeys(id, this.selectedQuality);
+      if (res.data && res.data.code === 200) {
+        this.music = res.data.data;
+        this.audioUrl = res.data.data.url || '';
+        this.error = '';
+        break; // 成功就退出循环
+      } else if (res.data && res.data.code === 503) {
+        attempts++;
+        if (attempts >= maxAttempts) {
+          this.error = '请求失败，已重试 10 次';
         } else {
-          this.lyric = '暂无歌词';
-          this.parsedLyric = [];
+          console.warn(`503 错误，正在重试 (${attempts}/${maxAttempts})...`);
+          continue; // 继续下一次循环
         }
-      } catch (e) {
+      } else {
+        this.error = res.data?.message || '未找到该音质的播放链接';
+        break; // 不是 503 就不用重试
+      }
+    } catch (e) {
+      this.error = '请求失败，请稍后重试';
+      break;
+    } finally {
+      this.loading = false;
+    }
+  }
+}
+,
+
+async fetchLyric() {
+  const id = this.$route.params.id;
+  if (!id) return;
+
+  let attempts = 0;
+  let success = false;
+
+  while (attempts < 5 && !success) {
+    try {
+      const res = await fetchLyricById(id);
+
+      if (res.data && res.data.code === 200) {
+        this.lyric = res.data.data.lrc || '';
+        console.log('获取歌词:', this.lyric);
+        this.parsedLyric = this.parseLRC(this.lyric);
+        success = true;
+      } else if (res.data && res.data.code === 503) {
+        attempts++;
+        // 可选：加个延迟，避免过快重试
+        await new Promise(r => setTimeout(r, 500));
+      } else {
+        this.lyric = '暂无歌词';
+        this.parsedLyric = [];
+        break;
+      }
+    } catch (e) {
+      attempts++;
+      if (attempts >= 5) {
         this.lyric = '歌词获取失败';
         this.parsedLyric = [];
       }
-    },
+    }
+  }
+}
+,
 
     // LRC歌词解析
-    parseLRC(lrc) {
-      if (!lrc) return [];
-      const lines = lrc.split(/\r?\n/);
-      const result = [];
-      const timeReg = /\[(\d{2}):(\d{2}\.\d{2})\]/;
-      for (const line of lines) {
-        const match = line.match(timeReg);
-        if (match) {
-          const min = parseInt(match[1]);
-          const sec = parseFloat(match[2]);
-          const time = min * 60 + sec;
-          const text = line.replace(timeReg, '').trim();
-          result.push({ time, text });
-        }
-      }
-      return result;
-    },
+parseLRC(lrc) {
+  if (!lrc) return [];
+  const lines = lrc.split(/\r?\n/);
+  const result = [];
+  const timeReg = /\[(\d{2}):(\d{2}(?:\.\d{1,3})?)\]/g;
+
+  for (const line of lines) {
+    const matches = [...line.matchAll(timeReg)];
+    const text = line.replace(timeReg, '').trim();
+    for (const m of matches) {
+      const min = parseInt(m[1]);
+      const sec = parseFloat(m[2]);
+      const time = min * 60 + sec;
+      if (text) result.push({ time, text });
+    }
+  }
+
+  return result.sort((a, b) => a.time - b.time);
+}
+,
 
     // 音频进度事件
     onTimeUpdate(e) {
@@ -193,7 +234,7 @@ playGlobal() {
     this.$root.player = {
       ...this.$root.player,
       ...this.music,
-      src: this.audioUrl,   // ✅ 加上音频链接
+      src: this.audioUrl,   //  加上音频链接
       playList,           // 用 MusicList.vue 的 list
       playIndex: playIndex !== -1 ? playIndex : 0
     };

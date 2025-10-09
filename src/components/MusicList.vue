@@ -74,25 +74,25 @@ export default {
     // 再触发全局播放
     this.playGlobal(item, index, url);
   },
-async playNext(index) {
-  console.log("触发了")
-  if (index < this.list.length - 1) {
-    const nextIndex = index + 1;
-    const nextItem = this.list[nextIndex];
-    if (nextItem) {
-      // ✅ 用 handlePlay 请求 url，再传给 playGlobal
-      await this.handlePlay(nextItem, nextIndex);
-    }
-  } else {
-    console.log("播放结束，已到最后一首");
-    this.$root.player = ""; // ✅ 停掉全局播放器
-  }
-},
+// async playNext(index) {
+//   console.log("触发了ml playNext")
+//   if (index < this.list.length - 1) {
+//     const nextIndex = index + 1;
+//     const nextItem = this.list[nextIndex];
+//     if (nextItem) {
+//       //  用 handlePlay 请求 url，再传给 playGlobal
+//       await this.handlePlay(nextItem, nextIndex);
+//     }
+//   } else {
+//     console.log("播放结束，已到最后一首");
+//     this.$root.player = ""; //  停掉全局播放器
+//   }
+// },
 
 goDetail(id) {
   this.$root.player = {
     ...this.$root.player,
-    playList: this.list   // ✅ 把当前列表放到全局
+    playList: this.list   //  把当前列表放到全局
   };
   this.$emit('go-detail', id);
 }
@@ -110,16 +110,7 @@ goDetail(id) {
       localStorage.setItem('favoriteMusicIds', JSON.stringify(this.favoriteIds));
       this.$emit('favorite-change', this.favoriteIds);
     },
-    // async playMusic(id) {
-    //   const res = await searchMusicByIdVkeys(id);
-    //   console.log(res)
-    //   if (res.data && res.data.code === 200 && res.data.data.url) {
-    //     this.audioMap[id] = res.data.data.url;
-    //     console.log('播放音乐URL:', this.audioMap[id]);
-    //   } else {
-    //     this.audioMap[id] = '';
-    //   }
-    // }
+
   },
   
 };
