@@ -60,7 +60,7 @@ export default {
       };
     },
       async handlePlay(item, index) {
-        console.log("触发",index)
+        console.log("播放了",index)
     // 先加载音乐 URL
     const res = await searchMusicByIdVkeys(item.id);
     let url = '';
@@ -74,20 +74,6 @@ export default {
     // 再触发全局播放
     this.playGlobal(item, index, url);
   },
-// async playNext(index) {
-//   console.log("触发了ml playNext")
-//   if (index < this.list.length - 1) {
-//     const nextIndex = index + 1;
-//     const nextItem = this.list[nextIndex];
-//     if (nextItem) {
-//       //  用 handlePlay 请求 url，再传给 playGlobal
-//       await this.handlePlay(nextItem, nextIndex);
-//     }
-//   } else {
-//     console.log("播放结束，已到最后一首");
-//     this.$root.player = ""; //  停掉全局播放器
-//   }
-// },
 
 goDetail(id) {
   this.$root.player = {

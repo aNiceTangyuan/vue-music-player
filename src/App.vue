@@ -16,118 +16,129 @@
   />
 </template>
 
-
 <script>
 import GlobalAudioPlayer from './components/GlobalAudioPlayer.vue';
-import { searchMusicByIdVkeys } from './api/music'
+import { searchMusicByIdVkeys } from './api/music';
+
 export default {
   name: 'App',
   components: { GlobalAudioPlayer },
   data() {
     return {
       player: {
-        url: '',      // 音乐播放地址
-        song: '',     // 歌曲名
-        singer: '',   // 歌手
-        cover: '',    // 封面
-        album: '',    // 专辑
-        quality: '',  // 音质
-        size: '',     // 文件大小
-        interval: '', // 时长
-        kbps: '',     // 码率
-        id: '',        // 歌曲ID
-        playIndex: 0,   // ✅ 默认下标
-        playList: [],    // ✅ 默认列表
-        currentTime: 0  // 当前播放时间
+        url: '',
+        song: '',
+        singer: '',
+        cover: '',
+        album: '',
+        quality: '',
+        size: '',
+        interval: '',
+        kbps: '',
+        id: '',
+        playIndex: 0,
+        playList: [],
+        currentTime: 0
       }
     };
   },
-      methods: {
-        handleTimeUpdate(currentTime) {
-          // 更新播放器的当前时间，供歌词滚动使用
-          if (this.player) {
-            this.player.currentTime = currentTime;
+  methods: {
+    handleTimeUpdate(currentTime) {
+      if (this.player) {
+        this.player.currentTime = currentTime;
+      }
+    },
+
+    /** 封装统一的重试函数 */
+    async retryFetchMusicUrl(id, maxRetries = 15, delay = 1000) {
+      for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+          const res = await searchMusicByIdVkeys(id);
+          if (res.data && res.data.code === 200 && res.data.data.url) {
+            console.log(`✅ 第 ${attempt} 次获取成功`);
+            return res.data.data.url;
+          } else {
+            console.warn(`⚠️ 第 ${attempt} 次获取失败，继续重试...`);
           }
-        },
-        async playPrev() {
-  const player = this.$root.player;
-  console.log('app 播放上一首');
+        } catch (e) {
+          console.error(`❌ 第 ${attempt} 次请求出错`, e);
+        }
+        // 每次重试等待 delay 毫秒（默认 1 秒）
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+      console.error(`❌ 已重试 ${maxRetries} 次仍失败，放弃`);
+      return null;
+    },
 
-  const prevIndex = player.playIndex - 1;
+    async playPrev() {
+      const player = this.$root.player;
+      console.log('app 播放上一首');
+      const prevIndex = player.playIndex - 1;
 
-  if (prevIndex >= 0) {
-    const prevItem = player.playList[prevIndex];
-    try {
-      const res = await searchMusicByIdVkeys(prevItem.id);
-      if (res.data && res.data.code === 200 && res.data.data.url) {
-        this.$root.player = {
-          ...player,
-          url: res.data.data.url,
-          song: prevItem.song,
-          singer: prevItem.singer,
-          cover: prevItem.cover,
-          album: prevItem.album,
-          id: prevItem.id,
-          playIndex: prevIndex,
-          playList: player.playList
-        };
+      if (prevIndex >= 0) {
+        const prevItem = player.playList[prevIndex];
+        const url = await this.retryFetchMusicUrl(prevItem.id); // ✅ 使用重试机制
+        if (url) {
+          this.$root.player = {
+            ...player,
+            url,
+            song: prevItem.song,
+            singer: prevItem.singer,
+            cover: prevItem.cover,
+            album: prevItem.album,
+            id: prevItem.id,
+            playIndex: prevIndex,
+            playList: player.playList
+          };
+        } else {
+          console.log('无法获取上一首 URL，停止播放');
+          this.$root.player = null;
+        }
       } else {
-        // url 获取失败
+        console.log('已经是第一首了');
+      }
+    },
+
+    async playNext() {
+      const player = this.$root.player;
+      console.log('app 播放下一首');
+
+      const nextIndex = player.playIndex + 1;
+      if (nextIndex < player.playList.length) {
+        const nextItem = player.playList[nextIndex];
+        console.log("准备播放下一首：", nextItem.song);
+
+        const url = await this.retryFetchMusicUrl(nextItem.id); // ✅ 使用重试机制
+        if (url) {
+          this.$root.player = {
+            ...player,
+            url,
+            song: nextItem.song,
+            singer: nextItem.singer,
+            cover: nextItem.cover,
+            album: nextItem.album,
+            id: nextItem.id,
+            playIndex: nextIndex,
+            playList: player.playList
+          };
+        } else {
+          console.log('无法获取下一首 URL，停止播放');
+          this.$root.player = null;
+        }
+      } else {
+        console.log('播放完最后一首，清空播放器');
         this.$root.player = null;
       }
-    } catch (e) {
-      console.error('获取上一首url失败', e);
-      this.$root.player = null;
+    },
+
+    async $searchMusicByIdVkeys(id) {
+      const { searchMusicByIdVkeys } = await import('./api/music');
+      return searchMusicByIdVkeys(id);
     }
-  } else {
-    console.log('已经是第一首了');
   }
-}
-,
-        async playNext() {
-          const player = this.$root.player;
-          console.log('app 播放下一首')
-          // if (!player || !player.playList || typeof player.playIndex !== 'number') return;
-          const nextIndex = player.playIndex + 1;
-          console.log("当前歌曲：", player.playList[0])
-          if (nextIndex < player.playList.length) {
-            const nextItem = player.playList[nextIndex];
-            // 异步获取下一首的 url
-            try {
-              const res = await searchMusicByIdVkeys(nextItem.id);
-              if (res.data && res.data.code === 200 && res.data.data.url) {
-                this.$root.player = {
-                  ...player,
-                  url: res.data.data.url,
-                  song: nextItem.song,
-                  singer: nextItem.singer,
-                  cover: nextItem.cover,
-                  album: nextItem.album,
-                  id: nextItem.id,
-                  playIndex: nextIndex,
-                  playList: player.playList
-                };
-              } else {
-                // url 获取失败，跳过
-                this.$root.player = null;
-              }
-            } catch (e) {
-              console.error('获取下一首url失败', e);
-              this.$root.player = null;
-            }
-          } else {
-            // 播完最后一首，清空
-            this.$root.player = null;
-          }
-        },
-        // 注入 API
-        async $searchMusicByIdVkeys(id) {
-          const { searchMusicByIdVkeys } = await import('./api/music');
-          return searchMusicByIdVkeys(id);
-        }
-      }
-    }
-      </script>
+};
+</script>
+
 <style>
 :root {
   --primary-color: #42b983;

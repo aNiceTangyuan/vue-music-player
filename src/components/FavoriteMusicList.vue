@@ -3,6 +3,7 @@
     <li
       v-for="(item, index) in list"
       :key="item.url || item.id"
+      :style="{ '--i': index }"
       class="fav-music-item"
       @click="handleGoDetail(item.id)"
     >

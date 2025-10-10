@@ -81,6 +81,7 @@
     </div>
     
     <audio 
+    autoplay
       ref="audio" 
       :src="src" 
       @ended="onEnded" 

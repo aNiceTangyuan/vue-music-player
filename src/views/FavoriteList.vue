@@ -1,8 +1,18 @@
 <template>
   <div class="favorite-list">
     <h2>我喜欢的音乐</h2>
-  <FavoriteMusicList :list="favoriteSongs" @refresh="fetchFavorites" />
-    <div v-if="!favoriteSongs.length" style="color:#888;margin-top:30px;">暂无喜欢的音乐</div>
+
+    <!-- ✅ 用 TransitionGroup 包裹子组件的内容 -->
+    <TransitionGroup name="stagger" tag="div">
+      <FavoriteMusicList
+        v-if="favoriteSongs.length"
+        :key="'fav-list'"
+        :list="favoriteSongs"
+        @refresh="fetchFavorites"
+      />
+    </TransitionGroup>
+
+    <div v-if="!favoriteSongs.length" class="empty">暂无喜欢的音乐</div>
   </div>
 </template>
 
@@ -15,60 +25,93 @@ export default {
   components: { FavoriteMusicList },
   data() {
     return {
-      favoriteSongs: []
+      favoriteSongs: [],
     };
   },
   async created() {
-    // 从localStorage获取喜欢的id
-    const ids = JSON.parse(localStorage.getItem('favoriteMusicIds') || '[]');
-    // console.log('喜欢的音乐ID列表:', ids); // 有ids返回
-    if (ids.length) {
-      // vkeys searchMusic 不支持批量 id，需循环请求
-      const results = await Promise.all(ids.map(id => searchMusicByIdVkeys(id)));
-      console.log('喜欢的音乐结果:', results);
-      // 合并所有结果
-      let songs = [];
-      results.forEach(res => {
-        if (res.data && res.data.code === 200) {
-          songs = songs.concat(res.data.data);
-        }
-      });
-      this.favoriteSongs = songs;
-    }
-    this.fetchFavorites();
+    await this.fetchFavorites();
   },
   methods: {
-async fetchFavorites() {
-  const ids = JSON.parse(localStorage.getItem('favoriteMusicIds') || '[]');
-
-  // 带重试的请求函数
-  async function fetchWithRetry(id, maxRetries = 10) {
-    let attempt = 0;
-    while (attempt < maxRetries) {
-      const res = await searchMusicByIdVkeys(id);
-      if (res.data && res.data.code === 200) {
-        return res.data.data; // 成功返回
-      } else if (res.data && res.data.code === 503) {
-        attempt++;
-        if (attempt < maxRetries) {
-          console.warn(`id=${id} 第${attempt}次重试...`);
-        }
-      } else {
-        break; // 其他错误直接退出
+    async fetchFavorites() {
+      const ids = JSON.parse(localStorage.getItem('favoriteMusicIds') || '[]');
+      if (!ids.length) {
+        this.favoriteSongs = [];
+        return;
       }
-    }
-    return []; // 超过次数或失败返回空数组
-  }
 
-  if (ids.length) {
-    const results = await Promise.all(ids.map(id => fetchWithRetry(id)));
-    this.favoriteSongs = results.flat(); // 合并数组
-  } else {
-    this.favoriteSongs = [];
-  }
-}
+      // 从缓存读取基础数据（不含 URL）
+      const cache = JSON.parse(localStorage.getItem('favoriteMusicCache') || '[]');
+      const cachedMap = new Map(cache.map(song => [song.id, song]));
 
-  }
+      // 取前50首做首屏显示
+      const first50Ids = ids.slice(0, 50);
+      const first50SongsBase = first50Ids
+        .map(id => {
+          const song = cachedMap.get(id);
+          if (song) {
+            const { url, ...rest } = song;
+            console.log(url)
+            return rest;
+          }
+          return null;
+        })
+        .filter(Boolean);
+
+      // ✅ 分步加入 favoriteSongs，让动画逐个触发
+      this.favoriteSongs = [];
+      let i = 0;
+      const addTimer = setInterval(() => {
+        if (i < first50SongsBase.length) {
+          this.favoriteSongs.push(first50SongsBase[i]);
+          i++;
+        } else {
+          clearInterval(addTimer);
+        }
+      }, 100); // 每隔 0.1 秒加入一首
+
+      // 异步获取 URL 并补齐
+      const urlResults = await Promise.all(
+        first50SongsBase.map(song => this.fetchUrlOnly(song.id))
+      );
+      first50SongsBase.forEach((song, i) => {
+        song.url = urlResults[i]?.url || '';
+      });
+
+      // 获取剩下的歌曲
+      const restIds = ids.slice(50);
+      if (restIds.length) {
+        const restResults = await Promise.all(restIds.map(id => this.fetchWithRetry(id)));
+        this.favoriteSongs = [...this.favoriteSongs, ...restResults.flat()];
+      }
+    },
+
+    async fetchUrlOnly(id) {
+      try {
+        const res = await searchMusicByIdVkeys(id);
+        if (res.data && res.data.code === 200) {
+          const data = res.data.data?.[0] || res.data.data;
+          return { url: data.url };
+        }
+      } catch (e) {
+        console.warn('获取url失败:', id, e);
+      }
+      return {};
+    },
+
+    async fetchWithRetry(id, maxRetries = 8) {
+      let attempt = 0;
+      while (attempt < maxRetries) {
+        const res = await searchMusicByIdVkeys(id);
+        if (res.data && res.data.code === 200) {
+          return res.data.data;
+        } else if (res.data && res.data.code === 503) {
+          attempt++;
+          await new Promise(r => setTimeout(r, 200));
+        } else break;
+      }
+      return [];
+    },
+  },
 };
 </script>
 
@@ -81,5 +124,24 @@ async fetchFavorites() {
   border-radius: 12px;
   background: #fff;
   text-align: center;
+}
+
+.empty {
+  color: #888;
+  margin-top: 30px;
+}
+
+/* ✅ 进场动画定义 */
+.stagger-enter-from {
+  opacity: 0;
+  transform: translateY(20px);
+}
+.stagger-enter-active {
+  transition: all 0.6s ease;
+  transition-delay: calc(var(--i, 0) * 0.1s);
+}
+.stagger-enter-to {
+  opacity: 1;
+  transform: translateY(0);
 }
 </style>
