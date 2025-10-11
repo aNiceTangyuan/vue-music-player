@@ -1,55 +1,61 @@
 <template>
-  <div v-if="music" class="music-detail-flex">
+  <transition name="fade" mode="out-in">
+    <div v-if="music" key="music-detail">
+      <div v-if="music" class="music-detail-flex">
 
-    <div class="music-detail-left">
-      <img :src="music.cover" :alt="music.song" class="music-detail-cover" />
-            <h2 class="music-detail-title">{{ music.song }}</h2>
-      <div class="music-detail-meta">
-        <div class="music-detail-singer">歌手：{{ music.singer }}</div>
-        <div class="music-detail-album">专辑：{{ music.album }}</div>
-        <div class="music-detail-quality">音质：{{ music.quality }}</div>
-        <div class="music-detail-size">大小：{{ music.size || '未知' }}</div>
-      </div>
-
-    </div>
-    <div class="music-detail-right">
-
-      <div v-if="parsedLyric.length" class="lyric-block" ref="lyricBlock">
-        <h3>歌词</h3>
-        <div class="lyric-scroll">
-          <div v-for="(line, idx) in parsedLyric" :key="idx"
-            :class="['lyric-line', { active: idx === currentLine }]"
-            :ref="idx === currentLine ? 'activeLyric' : null">
-            {{ line.text }}
+        <div class="music-detail-left">
+          <img :src="music.cover" :alt="music.song" class="music-detail-cover" />
+          <h2 class="music-detail-title">{{ music.song }}</h2>
+          <div class="music-detail-meta">
+            <div class="music-detail-singer">歌手：{{ music.singer }}</div>
+            <div class="music-detail-album">专辑：{{ music.album }}</div>
+            <div class="music-detail-quality">音质：{{ music.quality }}</div>
+            <div class="music-detail-size">大小：{{ music.size || '未知' }}</div>
           </div>
         </div>
-      </div>
-      <div v-else-if="lyric" class="lyric-block">
-        <h3>歌词</h3>
-        <pre class="lyric">{{ lyric }}</pre>
-      </div>
-      <div class="select-audio">
-            <div class="music-detail-select">
-        <label class="music-detail-label">音质：</label>
-        <select v-model="selectedQuality" @change="fetchAndPlay" class="music-detail-selectbox">
-          <option v-for="item in qualityOptions" :key="item.value" :value="item.value">{{ item.label }}</option>
-        </select>
-      </div>
-      <div class="music-detail-audio">
-        <!-- 播放按钮 -->
-        <button @click="playGlobal">播放</button>
 
-        <div v-if="!audioUrl && !loading" class="music-detail-nourl">请选择音质获取试听链接</div>
+        <div class="music-detail-right">
+
+          <div v-if="parsedLyric.length" class="lyric-block" ref="lyricBlock"
+          @mouseenter="isHoverLyric = true"
+          @mouseleave="isHoverLyric = false">
+            <h3>歌词</h3>
+            <div class="lyric-scroll">
+              <div v-for="(line, idx) in parsedLyric" :key="idx"
+                   :class="['lyric-line', { active: idx === currentLine }]"
+                   :ref="idx === currentLine ? 'activeLyric' : null">
+                {{ line.text }}
+              </div>
+            </div>
+          </div>
+          <div v-else-if="lyric" class="lyric-block">
+            <h3>歌词</h3>
+            <pre class="lyric">{{ lyric }}</pre>
+          </div>
+
+          <div class="select-audio">
+            <div class="music-detail-select">
+              <label class="music-detail-label">音质：</label>
+              <select v-model="selectedQuality" @change="fetchAndPlay" class="music-detail-selectbox">
+                <option v-for="item in qualityOptions" :key="item.value" :value="item.value">{{ item.label }}</option>
+              </select>
+            </div>
+            <div class="music-detail-audio">
+              <button @click="playGlobal">播放</button>
+              <div v-if="!audioUrl && !loading" class="music-detail-nourl">请选择音质获取试听链接</div>
+            </div>
+          </div>
+
+        </div>
       </div>
-      </div>
+
+      <div v-else-if="loading">加载中...</div>
+      <div v-else-if="error" class="error">{{ error }}</div>
     </div>
-  </div>
-  <div v-else-if="loading">加载中...</div>
-  <div v-else-if="error" class="error">{{ error }}</div>
+  </transition>
 </template>
 
 <script>
-
 import { searchMusicByIdVkeys, fetchLyricById } from '../api/music';
 
 export default {
@@ -72,130 +78,155 @@ export default {
         { value: 9, label: '超清母带（Master）' }
       ],
       audioUrl: '',
-  lyric: '',
-  parsedLyric: [],
-  currentLine: 0,
+      lyric: '',
+      parsedLyric: [],
+      currentLine: 0,
+      isHoverLyric: false, // 是否悬停歌词区域
+      hoverTimeout: null,  // 鼠标离开后恢复自动滚动的定时器
     };
   },
   async created() {
     await this.fetchAndPlay();
     await this.fetchLyric();
-    
   },
+  async beforeRouteUpdate(to, from, next) {
+    this.music = null;
+    this.audioUrl = '';
+    this.lyric = '';
+    this.parsedLyric = [];
+    this.currentLine = 0;
+    this.error = '';
+    this.loading = true;
 
-  methods: {
-      handleLyric(current) {
-    let idx = 0;
-    for (let i = 0; i < this.parsedLyric.length; i++) {
-      if (current >= this.parsedLyric[i].time) idx = i;
-      else break;
-    }
-    this.currentLine = idx;
-    this.scrollLyric();
-  },
-    // 选择音质后自动请求
-async fetchAndPlay() {
-  const id = this.$route.params.id;
-  if (!id) {
-    this.error = '无效的歌曲ID';
-    return;
-  }
-
-  this.loading = true;
-  this.audioUrl = '';
-
-  let attempts = 0;
-  const maxAttempts = 10;
-
-  while (attempts < maxAttempts) {
     try {
+      await this.fetchAndPlayById(to.params.id);
+      await this.fetchLyricById(to.params.id);
+      next();
+    } catch (e) {
+      this.error = '加载新歌曲失败';
+      next(e);
+    } finally {
+      this.loading = false;
+    }
+  },
+  methods: {
+    async fetchAndPlayById(id) {
       const res = await searchMusicByIdVkeys(id, this.selectedQuality);
       if (res.data && res.data.code === 200) {
         this.music = res.data.data;
         this.audioUrl = res.data.data.url || '';
-        this.error = '';
-        break; // 成功就退出循环
-      } else if (res.data && res.data.code === 503) {
-        attempts++;
-        if (attempts >= maxAttempts) {
-          this.error = '请求失败，已重试 10 次';
-        } else {
-          console.warn(`503 错误，正在重试 (${attempts}/${maxAttempts})...`);
-          continue; // 继续下一次循环
-        }
       } else {
-        this.error = res.data?.message || '未找到该音质的播放链接';
-        break; // 不是 503 就不用重试
+        this.error = '未找到播放链接';
       }
-    } catch (e) {
-      this.error = '请求失败，请稍后重试';
-      break;
-    } finally {
-      this.loading = false;
-    }
-  }
-}
-,
-
-async fetchLyric() {
-  const id = this.$route.params.id;
-  if (!id) return;
-
-  let attempts = 0;
-  let success = false;
-
-  while (attempts < 5 && !success) {
-    try {
+    },
+    async fetchLyricById(id) {
       const res = await fetchLyricById(id);
-
       if (res.data && res.data.code === 200) {
         this.lyric = res.data.data.lrc || '';
-        console.log('获取歌词:', this.lyric);
         this.parsedLyric = this.parseLRC(this.lyric);
-        success = true;
-      } else if (res.data && res.data.code === 503) {
-        attempts++;
-        // 可选：加个延迟，避免过快重试
-        await new Promise(r => setTimeout(r, 500));
       } else {
         this.lyric = '暂无歌词';
-        this.parsedLyric = [];
-        break;
       }
-    } catch (e) {
-      attempts++;
-      if (attempts >= 5) {
-        this.lyric = '歌词获取失败';
-        this.parsedLyric = [];
+    },
+    handleLyric(current) {
+      let idx = 0;
+      for (let i = 0; i < this.parsedLyric.length; i++) {
+        if (current >= this.parsedLyric[i].time) idx = i;
+        else break;
       }
-    }
-  }
-}
-,
+      this.currentLine = idx;
+      // 保留自动滚动
+      this.scrollLyric();
+    },
+    async fetchAndPlay() {
+      const id = this.$route.params.id;
+      if (!id) {
+        this.error = '无效的歌曲ID';
+        return;
+      }
 
-    // LRC歌词解析
-parseLRC(lrc) {
-  if (!lrc) return [];
-  const lines = lrc.split(/\r?\n/);
-  const result = [];
-  const timeReg = /\[(\d{2}):(\d{2}(?:\.\d{1,3})?)\]/g;
+      this.loading = true;
+      this.audioUrl = '';
+      let attempts = 0;
+      const maxAttempts = 10;
 
-  for (const line of lines) {
-    const matches = [...line.matchAll(timeReg)];
-    const text = line.replace(timeReg, '').trim();
-    for (const m of matches) {
-      const min = parseInt(m[1]);
-      const sec = parseFloat(m[2]);
-      const time = min * 60 + sec;
-      if (text) result.push({ time, text });
-    }
-  }
+      while (attempts < maxAttempts) {
+        try {
+          const res = await searchMusicByIdVkeys(id, this.selectedQuality);
+          if (res.data && res.data.code === 200) {
+            this.music = res.data.data;
+            this.audioUrl = res.data.data.url || '';
+            this.error = '';
+            break;
+          } else if (res.data && res.data.code === 503) {
+            attempts++;
+            if (attempts >= maxAttempts) {
+              this.error = '请求失败，已重试 10 次';
+            } else {
+              console.warn(`503 错误，正在重试 (${attempts}/${maxAttempts})...`);
+              continue;
+            }
+          } else {
+            this.error = res.data?.message || '未找到该音质的播放链接';
+            break;
+          }
+        } catch (e) {
+          this.error = '请求失败，请稍后重试';
+          break;
+        } finally {
+          this.loading = false;
+        }
+      }
+    },
+    async fetchLyric() {
+      const id = this.$route.params.id;
+      if (!id) return;
 
-  return result.sort((a, b) => a.time - b.time);
-}
-,
+      let attempts = 0;
+      let success = false;
 
-    // 音频进度事件
+      while (attempts < 5 && !success) {
+        try {
+          const res = await fetchLyricById(id);
+          if (res.data && res.data.code === 200) {
+            this.lyric = res.data.data.lrc || '';
+            this.parsedLyric = this.parseLRC(this.lyric);
+            success = true;
+          } else if (res.data && res.data.code === 503) {
+            attempts++;
+            await new Promise(r => setTimeout(r, 500));
+          } else {
+            this.lyric = '暂无歌词';
+            this.parsedLyric = [];
+            break;
+          }
+        } catch (e) {
+          attempts++;
+          if (attempts >= 5) {
+            this.lyric = '歌词获取失败';
+            this.parsedLyric = [];
+          }
+        }
+      }
+    },
+    parseLRC(lrc) {
+      if (!lrc) return [];
+      const lines = lrc.split(/\r?\n/);
+      const result = [];
+      const timeReg = /\[(\d{2}):(\d{2}(?:\.\d{1,3})?)\]/g;
+
+      for (const line of lines) {
+        const matches = [...line.matchAll(timeReg)];
+        const text = line.replace(timeReg, '').trim();
+        for (const m of matches) {
+          const min = parseInt(m[1]);
+          const sec = parseFloat(m[2]);
+          const time = min * 60 + sec;
+          if (text) result.push({ time, text });
+        }
+      }
+      return result.sort((a, b) => a.time - b.time);
+    },
     onTimeUpdate(e) {
       const audio = e.target;
       const current = audio.currentTime;
@@ -210,56 +241,68 @@ parseLRC(lrc) {
       this.currentLine = idx;
       this.scrollLyric();
     },
+      // 悬停歌词区域
+  onLyricMouseEnter() {
+    this.isHoverLyric = true;
+    if (this.hoverTimeout) {
+      clearTimeout(this.hoverTimeout);
+      this.hoverTimeout = null;
+    }
+  },
 
-    // 滚动歌词到当前行
-    scrollLyric() {
-      this.$nextTick(() => {
-        const block = this.$refs.lyricBlock;
-        const active = this.$refs.activeLyric;
-        if (block && active && active[0]) {
-          const blockEl = block;
-          const activeEl = active[0];
-          blockEl.scrollTop = activeEl.offsetTop - blockEl.offsetHeight / 2 + activeEl.offsetHeight / 2;
-        }
-      });
-    },
-playGlobal() {
-  if (this.music) {
-    // 从 MusicList.vue 拿到歌曲列表
-    const playList = this.$root.player.playList || this.$route.query.playList || []; 
-
-    // 找到当前歌曲在列表中的下标
-    const playIndex = playList.findIndex(item => item.id === this.music.id);
-
-    this.$root.player = {
-      ...this.$root.player,
-      ...this.music,
-      src: this.audioUrl,   //  加上音频链接
-      playList,           // 用 MusicList.vue 的 list
-      playIndex: playIndex !== -1 ? playIndex : 0
-    };
-  }
-}
-
-
-,
-
+  // 鼠标离开歌词区域
+  onLyricMouseLeave() {
+    if (this.hoverTimeout) clearTimeout(this.hoverTimeout);
+    this.hoverTimeout = setTimeout(() => {
+      this.isHoverLyric = false; // 延迟 3 秒恢复自动滚动
+    }, 3000);
+  },
+scrollLyric() {
+  if (this.isHoverLyric) return; // 悬停时停止自动滚动
+  this.$nextTick(() => {
+    const block = this.$refs.lyricBlock;
+    const active = this.$refs.activeLyric;
+    if (block && active && active[0]) {
+      const blockEl = block;
+      const activeEl = active[0];
+      blockEl.scrollTop =
+        activeEl.offsetTop - blockEl.offsetHeight / 2 + activeEl.offsetHeight / 2;
+    }
+  });
 },
+
+    playGlobal() {
+      if (this.music) {
+        const playList = this.$root.player.playList || this.$route.query.playList || [];
+        const playIndex = playList.findIndex(item => item.id === this.music.id);
+        this.$root.player = {
+          ...this.$root.player,
+          ...this.music,
+          src: this.audioUrl,
+          playList,
+          playIndex: playIndex !== -1 ? playIndex : 0
+        };
+      }
+    }
+  },
   watch: {
     selectedQuality() {
       this.fetchAndPlay();
       this.fetchLyric();
     },
     '$root.player.currentTime'(newTime) {
-      // 监听全局播放器的时间变化，触发歌词滚动
       if (this.$root.player && this.$root.player.id === this.music?.id) {
         this.handleLyric(newTime);
+      }
+    },
+    '$root.player.id'(newId) {
+      if (newId && this.$route.params.id !== String(newId)) {
+        this.$router.push(`/music/${newId}`);
       }
     }
   }
 };
 </script>
-
 <style scoped>
 
 /* 详情页左右布局美化升级 */
@@ -367,10 +410,45 @@ playGlobal() {
   line-height: 2.1;
   letter-spacing: 0.5px;
   font-family: 'Fira Mono', 'Consolas', 'Menlo', monospace;
-  padding: 2px 0;
-  transition: color 0.2s, font-size 0.2s;
+  padding: 2px 10px; /* 左右保留少量内边距 */
+  transition: color 0.2s, font-size 0.2s, background 0.2s, box-shadow 0.2s;
   opacity: 0.7;
+  display: block;      /* 让每行独占一行 */
+  width: 100%;         /* 宽度撑满父容器 */
+  box-sizing: border-box; /* padding 不影响宽度 */
+    position: relative; /* 让按钮绝对定位在行内右侧 */
 }
+
+.lyric-line:hover {
+  background: rgba(66, 185, 131, 0.15);
+  box-shadow: 0 4px 12px rgba(66, 185, 131, 0.2);
+  border-radius: 6px;
+}
+.lyric-play-btn {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: rgba(66, 185, 131, 0.8);
+  color: #fff;
+  border: none;
+  border-radius: 50%;
+  width: 24px;
+  height: 24px;
+  font-size: 14px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.2s, background 0.2s;
+}
+
+.lyric-line:hover .lyric-play-btn {
+  opacity: 1; /* 鼠标悬浮显示按钮 */
+}
+
+.lyric-play-btn:hover {
+  background: #42b983;
+}
+
 .lyric-line.active {
   color: #42b983;
   font-size: 19px;
@@ -449,4 +527,11 @@ playGlobal() {
   margin-top: 40px;
   text-align: center;
 }
+.fade-enter-active, .fade-leave-active {
+  transition: opacity 0.4s;
+}
+.fade-enter-from, .fade-leave-to {
+  opacity: 0;
+}
+
 </style>

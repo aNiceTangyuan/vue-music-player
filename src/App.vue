@@ -1,21 +1,34 @@
-
-
 <template>
-  <router-view />
-  <GlobalAudioPlayer
-    v-if="player"
-    :src="player.url"
-    :title="player.song"
-    :artist="player.singer"
-    :cover="player.cover"
-    :musicId="player.id"
-    @ended="playNext"
-    @timeupdate="handleTimeUpdate"
-    @prev="playPrev"
-    @next="playNext"
-  />
-</template>
+  <div id="app-layout">
+    <!-- ✅ 全局常驻侧边栏 -->
+    <aside class="sidebar">
+      <h2 class="sidebar-title">🎵 功能导航</h2>
+      <button class="sidebar-btn" @click="$router.push('/')">音乐搜索</button>
+      <button class="sidebar-btn" @click="$router.push('/favorite')">我喜欢的音乐歌单</button>
+    </aside>
 
+    <!-- ✅ 主体区域（所有页面内容） -->
+    <main class="main-content">
+      <router-view />
+    </main>
+
+    <!-- ✅ 全局播放器 -->
+    <GlobalAudioPlayer
+      v-if="player"
+      :src="player.url"
+      :title="player.song"
+      :artist="player.singer"
+      :cover="player.cover"
+      :musicId="player.id"
+      :playMode="playMode"
+      @togglePlayMode="togglePlayMode"
+      @ended="playNext"
+      @timeupdate="handleTimeUpdate"
+      @prev="playPrev"
+      @next="playNext"
+    />
+  </div>
+</template>
 <script>
 import GlobalAudioPlayer from './components/GlobalAudioPlayer.vue';
 import { searchMusicByIdVkeys } from './api/music';
@@ -30,169 +43,188 @@ export default {
         song: '',
         singer: '',
         cover: '',
-        album: '',
-        quality: '',
-        size: '',
-        interval: '',
-        kbps: '',
         id: '',
         playIndex: 0,
         playList: [],
         currentTime: 0
-      }
+      },
+      playMode: 'order', // ✅ 新增：播放模式（order/random/single）
+      playedSet: new Set() // ✅ 随机模式下记录已播放的歌曲
     };
   },
   methods: {
     handleTimeUpdate(currentTime) {
-      if (this.player) {
-        this.player.currentTime = currentTime;
-      }
+      if (this.player) this.player.currentTime = currentTime;
     },
 
-    /** 封装统一的重试函数 */
-    async retryFetchMusicUrl(id, maxRetries = 15, delay = 1000) {
+    togglePlayMode() {
+      const modes = ['order', 'random', 'single'];
+      const next = modes[(modes.indexOf(this.playMode) + 1) % modes.length];
+      this.playMode = next;
+      this.playedSet.clear(); // 切换模式时清空历史
+      console.log('播放模式切换为：', next);
+    },
+
+    async retryFetchMusicUrl(id, maxRetries = 10, delay = 800) {
       for (let attempt = 1; attempt <= maxRetries; attempt++) {
         try {
           const res = await searchMusicByIdVkeys(id);
-          if (res.data && res.data.code === 200 && res.data.data.url) {
-            console.log(`✅ 第 ${attempt} 次获取成功`);
-            return res.data.data.url;
-          } else {
-            console.warn(`⚠️ 第 ${attempt} 次获取失败，继续重试...`);
-          }
-        } catch (e) {
-          console.error(`❌ 第 ${attempt} 次请求出错`, e);
+          if (res.data?.code === 200 && res.data.data.url) return res.data.data.url;
+        } catch (error) {
+          console.error(`尝试获取音乐 URL 失败（第 ${attempt} 次）：`, error);
         }
-        // 每次重试等待 delay 毫秒（默认 1 秒）
-        await new Promise(resolve => setTimeout(resolve, delay));
+        await new Promise(r => setTimeout(r, delay));
       }
-      console.error(`❌ 已重试 ${maxRetries} 次仍失败，放弃`);
       return null;
     },
 
+    /** 播放上一首（顺序模式下） */
     async playPrev() {
-      const player = this.$root.player;
-      console.log('app 播放上一首');
+      if (this.playMode === 'random') return this.playRandom(); // 随机模式：直接随机
+      const player = this.player;
       const prevIndex = player.playIndex - 1;
-
       if (prevIndex >= 0) {
-        const prevItem = player.playList[prevIndex];
-        const url = await this.retryFetchMusicUrl(prevItem.id); // ✅ 使用重试机制
-        if (url) {
-          this.$root.player = {
-            ...player,
-            url,
-            song: prevItem.song,
-            singer: prevItem.singer,
-            cover: prevItem.cover,
-            album: prevItem.album,
-            id: prevItem.id,
-            playIndex: prevIndex,
-            playList: player.playList
-          };
-        } else {
-          console.log('无法获取上一首 URL，停止播放');
-          this.$root.player = null;
-        }
+        await this.playByIndex(prevIndex);
       } else {
         console.log('已经是第一首了');
       }
     },
 
-    async playNext() {
-      const player = this.$root.player;
-      console.log('app 播放下一首');
+    /* 播放下一首 */
+async playNext() {
+  console.log('当前模式：', this.playMode);
+  if (this.playMode === 'random') {
+    return this.playRandom();
+  }
 
-      const nextIndex = player.playIndex + 1;
-      if (nextIndex < player.playList.length) {
-        const nextItem = player.playList[nextIndex];
-        console.log("准备播放下一首：", nextItem.song);
+  // 顺序播放
+  const nextIndex = this.player.playIndex + 1;
+  if (nextIndex < this.player.playList.length) {
+    await this.playByIndex(nextIndex);
+  } else {
+    console.log('播放完最后一首');
+    this.$root.player = null;
+  }
+}
+,
 
-        const url = await this.retryFetchMusicUrl(nextItem.id); // ✅ 使用重试机制
-        if (url) {
-          this.$root.player = {
-            ...player,
-            url,
-            song: nextItem.song,
-            singer: nextItem.singer,
-            cover: nextItem.cover,
-            album: nextItem.album,
-            id: nextItem.id,
-            playIndex: nextIndex,
-            playList: player.playList
-          };
-        } else {
-          console.log('无法获取下一首 URL，停止播放');
-          this.$root.player = null;
-        }
-      } else {
-        console.log('播放完最后一首，清空播放器');
-        this.$root.player = null;
+    /** 随机播放（不会重复） */
+    async playRandom() {
+      const { playList, playIndex } = this.player;
+      if (!playList.length) return;
+
+      // 添加当前曲目到已播放集合
+      this.playedSet.add(playList[playIndex]?.id);
+
+      const unplayed = playList.filter(item => !this.playedSet.has(item.id));
+      if (unplayed.length === 0) {
+        this.playedSet.clear(); // 全部播放完，重置
+        this.playedSet.add(playList[playIndex]?.id);
+        console.log('🎲 所有歌曲已播放一轮，重新开始随机');
       }
+
+      const pool = playList.filter(item => !this.playedSet.has(item.id));
+      const next = pool[Math.floor(Math.random() * pool.length)];
+      const index = playList.findIndex(i => i.id === next.id);
+      await this.playByIndex(index);
     },
 
-    async $searchMusicByIdVkeys(id) {
-      const { searchMusicByIdVkeys } = await import('./api/music');
-      return searchMusicByIdVkeys(id);
+    /** 按索引播放歌曲 */
+    async playByIndex(index) {
+      const player = this.player;
+      const nextItem = player.playList[index];
+      const url = await this.retryFetchMusicUrl(nextItem.id);
+      if (!url) return console.warn('无法获取 URL');
+
+      this.player = {
+        ...player,
+        url,
+        song: nextItem.song,
+        singer: nextItem.singer,
+        cover: nextItem.cover,
+        id: nextItem.id,
+        playIndex: index
+      };
     }
   }
 };
 </script>
 
 <style>
-:root {
-  --primary-color: #42b983;
-  --primary-light: #eafaf3;
-  --primary-dark: #2c9d6a;
-  --text-color: #2c3e50;
-  --text-light: #606f7b;
-  --background-light: #f8fcfa;
-  --shadow-sm: 0 2px 8px rgba(66, 185, 131, 0.08);
-  --shadow-md: 0 4px 16px rgba(66, 185, 131, 0.12);
-  --shadow-lg: 0 8px 24px rgba(66, 185, 131, 0.16);
-  --radius-sm: 8px;
-  --radius-md: 12px;
-  --radius-lg: 16px;
-  --transition-fast: 0.2s;
-  --transition-normal: 0.3s;
+/* =================== 全局布局 =================== */
+#app-layout {
+  display: flex;
+  min-height: 100vh;
+  background: linear-gradient(120deg, #eafaf3 0%, #fff 100%);
+  color: #2c3e50;
+  font-family: Avenir, Helvetica, Arial, sans-serif;
 }
 
-body {
-  font-family: 'Avenir', Helvetica, Arial, sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  color: var(--text-color);
-  background-color: #f9fafb;
-  margin: 0;
-  padding: 0;
+/* ✅ 侧边栏样式（常驻） */
+.sidebar {
+  width: 220px;
+  background: linear-gradient(180deg, #42b983 0%, #369870 100%);
+  color: #fff;
+  padding: 40px 20px;
+  box-shadow: 2px 0 8px rgba(66,185,131,0.1);
+  position: fixed;
+  left: 0;
+  top: 0;
+  bottom: 0;
 }
 
-button {
+.sidebar-title {
+  font-size: 20px;
+  font-weight: 700;
+  margin-bottom: 30px;
+  text-align: center;
+}
+
+.sidebar-btn {
+  width: 100%;
+  padding: 12px 0;
+  background: #fff;
+  color: #42b983;
+  border: none;
+  border-radius: 10px;
   cursor: pointer;
-  transition: all var(--transition-fast);
+  font-size: 16px;
+  font-weight: 600;
+  transition: background 0.2s, transform 0.2s;
+  margin-bottom: 12px;
 }
 
-button:hover {
-  transform: translateY(-2px);
+.sidebar-btn:hover {
+  background: #eafaf3;
+  transform: scale(1.05);
 }
 
-button:active {
-  transform: translateY(0);
+/* ✅ 主体内容 */
+.main-content {
+  margin-left: 240px;
+  flex: 1;
+  padding: 30px 20px;
+  text-align: center;
+  justify-content: center;
 }
 
-/* 全局过渡效果 */
-.fade-enter-active, .fade-leave-active {
-  transition: opacity var(--transition-normal);
-}
-.fade-enter, .fade-leave-to {
-  opacity: 0;
-}
+/* ✅ 响应式适配 */
+@media (max-width: 768px) {
+  #app-layout {
+    flex-direction: column;
+  }
 
-.slide-up-enter-active, .slide-up-leave-active {
-  transition: transform var(--transition-normal), opacity var(--transition-normal);
-}
-.slide-up-enter, .slide-up-leave-to {
-  transform: translateY(20px);
-  opacity: 0;
+  .sidebar {
+    position: relative;
+    width: 100%;
+    height: auto;
+    box-shadow: none;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 12px;
+  }
+
+
 }
 </style>
