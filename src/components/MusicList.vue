@@ -90,10 +90,39 @@ goDetail(id) {
       const idx = this.favoriteIds.indexOf(id);
       if (idx > -1) {
         this.favoriteIds.splice(idx, 1);
+        // 从缓存中移除对应条目
+        try {
+          const cache = JSON.parse(localStorage.getItem('favoriteMusicCache') || '[]');
+          const newCache = cache.filter(s => s.id !== id);
+          localStorage.setItem('favoriteMusicCache', JSON.stringify(newCache));
+        } catch (e) {
+          console.warn('更新 favoriteMusicCache 时出错', e);
+        }
       } else {
         this.favoriteIds.push(id);
+        // 向缓存中添加基础信息（便于收藏页快速展示）
+        try {
+          const song = this.list.find(i => i.id === id);
+          if (song) {
+            const cache = JSON.parse(localStorage.getItem('favoriteMusicCache') || '[]');
+            // 只存必要字段，避免冗余
+            cache.unshift({
+              id: song.id,
+              song: song.song || song.name,
+              singer: song.singer || song.ar_name,
+              cover: song.cover || song.pic,
+              album: song.album || song.al_name,
+              quality: song.quality
+            });
+            localStorage.setItem('favoriteMusicCache', JSON.stringify(cache));
+          }
+        } catch (e) {
+          console.warn('更新 favoriteMusicCache 时出错', e);
+        }
       }
       localStorage.setItem('favoriteMusicIds', JSON.stringify(this.favoriteIds));
+      // 通知同页面其它组件刷新收藏显示
+      window.dispatchEvent(new CustomEvent('favorites-changed', { detail: this.favoriteIds }));
       this.$emit('favorite-change', this.favoriteIds);
     },
 

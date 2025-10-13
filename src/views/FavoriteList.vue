@@ -31,6 +31,14 @@ export default {
   async created() {
     await this.fetchFavorites();
   },
+    mounted() {
+    // 监听收藏变更事件，重新加载
+    window.addEventListener('favorites-changed', this.fetchFavorites);
+  },
+
+  beforeUnmount() {
+    window.removeEventListener('favorites-changed', this.fetchFavorites);
+  },
   methods: {
     async fetchFavorites() {
       const ids = JSON.parse(localStorage.getItem('favoriteMusicIds') || '[]');

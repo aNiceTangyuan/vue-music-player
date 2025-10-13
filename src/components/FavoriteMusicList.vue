@@ -38,6 +38,7 @@ export default {
       default: () => [],
     },
   },
+  
   methods: {
     playGlobal(item, index) {
       // 告诉全局播放器播放这个音乐

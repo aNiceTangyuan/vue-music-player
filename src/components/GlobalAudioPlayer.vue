@@ -48,13 +48,15 @@
       </div>
 
 <!-- 播放模式按钮 -->
-<button class="control-btn mode-btn" @click="$emit('togglePlayMode')">
-  <svg v-if="playMode === 'order'" viewBox="0 0 24 24" class="icon icon-small">
+<button class="control-btn mode-btn" @click="$emit('togglePlayMode')" :title="modeLabel">
+  <svg v-if="localPlayMode === 'order'" viewBox="0 0 24 24" class="icon icon-small">
     <!-- 顺序播放图标 -->
-    <path d="M3 9h4l3 3-3 3H3l4-4zm14 0h4v6h-4v3l-4-4 4-4v3z" fill="currentColor"/>
+    <!-- 顺序播放 -->
+<path d="M3 12l7-7v14l-7-7zm11 0l7-7v14l-7-7z" fill="currentColor" />
+
   </svg>
 
-  <svg v-else-if="playMode === 'random'" viewBox="0 0 24 24" class="icon icon-small">
+  <svg v-else-if="localPlayMode === 'random'" viewBox="0 0 24 24" class="icon icon-small">
     <!-- 随机播放图标 -->
     <path d="M17 1l4 4-4 4V6h-2.59l-4 4H9l4-4H17V1zM3 9l4 4-4 4V9zm8 6l4-4H17v3l4-4-4-4v3h-2.59l-4 4H11z" fill="currentColor"/>
   </svg>
