@@ -1,3 +1,206 @@
+<script setup>
+import { ref, computed, watch, getCurrentInstance, onMounted, nextTick } from 'vue'
+import { useRouter } from 'vue-router'
+
+// props
+const props = defineProps({
+  src: String,
+  title: String,
+  artist: String,
+  cover: String,
+  musicId: [String, Number],
+  playMode: {
+    type: String,
+    default: 'order'
+  }
+})
+const emit = defineEmits(['prev', 'next', 'togglePlayMode', 'play', 'pause', 'timeupdate', 'play-random'])
+
+const audio = ref(null)
+const visible = ref(true)
+const isPlaying = ref(false)
+const currentTime = ref(0)
+const duration = ref(0)
+const volume = ref(1)
+const volumePercent = ref(100)
+const lastVolume = ref(1)
+const isSeeking = ref(false)
+const wasPlaying = ref(false)
+const hovering = ref(false)
+const playedSet = ref(new Set())
+const localPlayMode = ref(props.playMode)
+const tempTime = ref(0)
+
+const { proxy } = getCurrentInstance()
+const router = useRouter()
+
+const progress = computed(() => {
+  if (!duration.value) return 0
+  return (currentTime.value / duration.value) * 100
+})
+
+const modeLabel = computed(() => {
+  return {
+    order: '顺序播放',
+    random: '随机播放',
+    single: '单曲循环'
+  }[localPlayMode.value]
+})
+
+watch(() => props.playMode, (newVal) => {
+  localPlayMode.value = newVal
+})
+
+watch(() => props.src, (newVal) => {
+  visible.value = !!newVal
+  if (newVal) {
+    nextTick(() => {
+      if (audio.value) {
+        audio.value.play()
+      }
+    })
+  }
+})
+
+function startSeek(event) {
+  event.preventDefault()
+  if (!duration.value) return
+  isSeeking.value = true
+  wasPlaying.value = isPlaying.value
+  if (isPlaying.value && audio.value) audio.value.pause()
+  tempTime.value = currentTime.value
+  updateSeekSmooth(event)
+  window.addEventListener('mousemove', onGlobalSeekMove)
+  window.addEventListener('mouseup', onGlobalSeekEnd)
+}
+
+function onGlobalSeekMove(event) {
+  if (!isSeeking.value) return
+  if (!proxy._rafPending) {
+    proxy._rafPending = true
+    requestAnimationFrame(() => {
+      updateSeekSmooth(event)
+      proxy._rafPending = false
+    })
+  }
+}
+
+function onGlobalSeekEnd(event) {
+  if (!isSeeking.value) return
+  isSeeking.value = false
+  updateSeekSmooth(event)
+  if (audio.value) audio.value.currentTime = tempTime.value
+  if (wasPlaying.value && audio.value) audio.value.play()
+  window.removeEventListener('mousemove', onGlobalSeekMove)
+  window.removeEventListener('mouseup', onGlobalSeekEnd)
+}
+
+function updateSeekSmooth(event) {
+  const bar = proxy.$el.querySelector('.top-progress-bar')
+  if (!bar || !duration.value) return
+  const rect = bar.getBoundingClientRect()
+  const offsetX = Math.max(0, Math.min(event.clientX - rect.left, rect.width))
+  const percentage = offsetX / rect.width
+  const newTime = percentage * duration.value
+  tempTime.value = newTime
+  const fill = proxy.$el.querySelector('.progress-bar-fill')
+  if (fill) fill.style.width = `${percentage * 100}%`
+  const handle = proxy.$el.querySelector('.progress-handle')
+  if (handle) handle.style.left = `${percentage * 100}%`
+}
+
+function togglePlay() {
+  if (!audio.value) return
+  if (isPlaying.value) audio.value.pause()
+  else audio.value.play()
+}
+
+function onEnded() {
+  const mode = localPlayMode.value
+  isPlaying.value = false
+  if (mode === 'single') {
+    if (audio.value) {
+      audio.value.currentTime = 0
+      audio.value.play()
+    }
+  } else if (mode === 'order') {
+    emit('next')
+  } else if (mode === 'random') {
+    const parent = proxy.$parent
+    if (!parent?.playlist || !Array.isArray(parent.playlist)) {
+      emit('next')
+      return
+    }
+    const playlist = parent.playlist
+    if (playlist.length === 0) return
+    playedSet.value.add(props.musicId)
+    const unplayed = playlist.filter(item => !playedSet.value.has(item.id))
+    let nextSong
+    if (unplayed.length > 0) {
+      nextSong = unplayed[Math.floor(Math.random() * unplayed.length)]
+    } else {
+      playedSet.value.clear()
+      nextSong = playlist[Math.floor(Math.random() * playlist.length)]
+    }
+    emit('play-random', nextSong)
+  }
+}
+
+function onPlay() {
+  isPlaying.value = true
+  emit('play')
+}
+function onPause() {
+  isPlaying.value = false
+  emit('pause')
+}
+function updateTime() {
+  if (audio.value && !isSeeking.value) {
+    currentTime.value = audio.value.currentTime
+    emit('timeupdate', currentTime.value)
+  }
+}
+function updateDuration() {
+  if (audio.value) duration.value = audio.value.duration
+}
+function changeVolume() {
+  if (audio.value) {
+    volume.value = volumePercent.value / 100
+    audio.value.volume = volume.value
+  }
+}
+function toggleMute() {
+  if (!audio.value) return
+  if (volume.value > 0) {
+    lastVolume.value = volume.value
+    volume.value = 0
+    volumePercent.value = 0
+    audio.value.volume = 0
+  } else {
+    volume.value = lastVolume.value
+    volumePercent.value = lastVolume.value * 100
+    audio.value.volume = lastVolume.value
+  }
+}
+// function formatTime(seconds) {
+//   if (!seconds || isNaN(seconds)) return '0:00'
+//   const mins = Math.floor(seconds / 60)
+//   const secs = Math.floor(seconds % 60)
+//   return `${mins}:${secs.toString().padStart(2, '0')}`
+// }
+function navigateToDetail() {
+  if (props.musicId) router.push(`/music/${props.musicId}`)
+}
+function closePlayer() {
+  visible.value = false
+  if (audio.value) audio.value.pause()
+}
+
+onMounted(() => {
+  if (audio.value) audio.value.volume = volume.value
+})
+</script>
+ 
 <template>
   <div class="global-audio-player" v-show="visible">
     <!-- 顶部沉浸式进度条 -->
@@ -119,218 +322,6 @@
     />
   </div>
 </template>
-<script>
-export default {
-  name: 'GlobalAudioPlayer',
-  props: {
-    src: String,
-    title: String,
-    artist: String,
-    cover: String,
-    musicId: [String, Number],
-    playMode: {
-      type: String,
-      default: 'order' // 顺序播放为默认模式
-    }
-  },
-  data() {
-    return {
-      visible: true,
-      isPlaying: false,
-      currentTime: 0,
-      duration: 0,
-      volume: 1,
-      volumePercent: 100,
-      lastVolume: 1,
-      isSeeking: false,
-      wasPlaying: false,
-      hovering: false,
-      playedSet: new Set(),
-      localPlayMode: this.playMode //  本地副本
-    };
-  },
-  computed: {
-    progress() {
-      if (!this.duration) return 0;
-      return (this.currentTime / this.duration) * 100;
-    },
-    modeLabel() {
-      return {
-        order: '顺序播放',
-        random: '随机播放',
-        single: '单曲循环'
-      }[this.localPlayMode];
-    }
-  },
-  watch: {
-    playMode(newVal) {
-      // ✅ 同步父组件变化
-      this.localPlayMode = newVal;
-    },
-    src(newVal) {
-      this.visible = !!newVal;
-      if (newVal) {
-        this.$nextTick(() => {
-          if (this.$refs.audio) {
-            this.$refs.audio.play();
-          }
-        });
-      }
-    }
-  },
-  methods: {
-
-
-    startSeek(event) {
-      event.preventDefault();
-      if (!this.duration) return;
-      this.isSeeking = true;
-      this.wasPlaying = this.isPlaying;
-      if (this.isPlaying) this.$refs.audio.pause();
-      this.tempTime = this.currentTime;
-      this.updateSeekSmooth(event);
-      window.addEventListener('mousemove', this.onGlobalSeekMove);
-      window.addEventListener('mouseup', this.onGlobalSeekEnd);
-    },
-
-    onGlobalSeekMove(event) {
-      if (!this.isSeeking) return;
-      if (!this._rafPending) {
-        this._rafPending = true;
-        requestAnimationFrame(() => {
-          this.updateSeekSmooth(event);
-          this._rafPending = false;
-        });
-      }
-    },
-
-    onGlobalSeekEnd(event) {
-      if (!this.isSeeking) return;
-      this.isSeeking = false;
-      this.updateSeekSmooth(event);
-      if (this.$refs.audio) this.$refs.audio.currentTime = this.tempTime;
-      if (this.wasPlaying) this.$refs.audio.play();
-      window.removeEventListener('mousemove', this.onGlobalSeekMove);
-      window.removeEventListener('mouseup', this.onGlobalSeekEnd);
-    },
-
-    updateSeekSmooth(event) {
-      const bar = this.$el.querySelector('.top-progress-bar');
-      if (!bar || !this.duration) return;
-      const rect = bar.getBoundingClientRect();
-      const offsetX = Math.max(0, Math.min(event.clientX - rect.left, rect.width));
-      const percentage = offsetX / rect.width;
-      const newTime = percentage * this.duration;
-      this.tempTime = newTime;
-      const fill = this.$el.querySelector('.progress-bar-fill');
-      if (fill) fill.style.width = `${percentage * 100}%`;
-      const handle = this.$el.querySelector('.progress-handle');
-      if (handle) handle.style.left = `${percentage * 100}%`;
-    },
-
-    togglePlay() {
-      const audio = this.$refs.audio;
-      if (!audio) return;
-      if (this.isPlaying) audio.pause();
-      else audio.play();
-    },
-
-    onEnded() {
-      const mode = this.localPlayMode; // ✅ 使用本地模式
-      this.isPlaying = false;
-
-      if (mode === 'single') {
-        const audio = this.$refs.audio;
-        if (audio) {
-          audio.currentTime = 0;
-          audio.play();
-        }
-      } else if (mode === 'order') {
-        this.$emit('next');
-      } else if (mode === 'random') {
-        if (!this.$parent?.playlist || !Array.isArray(this.$parent.playlist)) {
-          this.$emit('next');
-          return;
-        }
-
-        const playlist = this.$parent.playlist;
-        if (playlist.length === 0) return;
-        this.playedSet.add(this.musicId);
-
-        const unplayed = playlist.filter(item => !this.playedSet.has(item.id));
-        let nextSong;
-        if (unplayed.length > 0) {
-          nextSong = unplayed[Math.floor(Math.random() * unplayed.length)];
-        } else {
-          this.playedSet.clear();
-          nextSong = playlist[Math.floor(Math.random() * playlist.length)];
-        }
-
-        this.$emit('play-random', nextSong);
-      }
-    },
-
-    onPlay() {
-      this.isPlaying = true;
-      this.$emit('play');
-    },
-    onPause() {
-      this.isPlaying = false;
-      this.$emit('pause');
-    },
-    updateTime() {
-      const audio = this.$refs.audio;
-      if (audio && !this.isSeeking) {
-        this.currentTime = audio.currentTime;
-        this.$emit('timeupdate', this.currentTime);
-      }
-    },
-    updateDuration() {
-      const audio = this.$refs.audio;
-      if (audio) this.duration = audio.duration;
-    },
-    changeVolume() {
-      const audio = this.$refs.audio;
-      if (audio) {
-        this.volume = this.volumePercent / 100;
-        audio.volume = this.volume;
-      }
-    },
-    toggleMute() {
-      const audio = this.$refs.audio;
-      if (!audio) return;
-      if (this.volume > 0) {
-        this.lastVolume = this.volume;
-        this.volume = 0;
-        this.volumePercent = 0;
-        audio.volume = 0;
-      } else {
-        this.volume = this.lastVolume;
-        this.volumePercent = this.lastVolume * 100;
-        audio.volume = this.lastVolume;
-      }
-    },
-    formatTime(seconds) {
-      if (!seconds || isNaN(seconds)) return '0:00';
-      const mins = Math.floor(seconds / 60);
-      const secs = Math.floor(seconds % 60);
-      return `${mins}:${secs.toString().padStart(2, '0')}`;
-    },
-    navigateToDetail() {
-      if (this.musicId) this.$router.push(`/music/${this.musicId}`);
-    },
-    closePlayer() {
-      this.visible = false;
-      const audio = this.$refs.audio;
-      if (audio) audio.pause();
-    }
-  },
-  mounted() {
-    const audio = this.$refs.audio;
-    if (audio) audio.volume = this.volume;
-  }
-};
-</script>
 
 <style scoped>
 .mode-btn {

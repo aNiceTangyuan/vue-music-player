@@ -1,217 +1,164 @@
+<script setup>
+import { usePlayerStore } from '@/stores/playerStore'
+import { useFavoritesStore } from '@/stores/favoritesStore'
+
+// 定义 props
+const props = defineProps({
+  list: {
+    type: Array,
+    default: () => []
+  }
+})
+
+// 定义 emits
+const emit = defineEmits(['go-detail'])
+
+// 使用 stores
+const player = usePlayerStore()
+const favorites = useFavoritesStore()
+
+// 处理播放
+const handlePlay = async (item, index) => {
+  console.log("播放了", index)
+  // 设置播放列表并播放指定索引的歌曲
+  player.setPlayList(props.list, index)
+  await player.playByIndex(index)
+}
+
+// 跳转到详情页
+const goDetail = (id) => {
+  // 设置当前播放列表（以便详情页可以使用上一首/下一首）
+  player.setPlayList(props.list)
+  emit('go-detail', id)
+}
+
+// 切换收藏状态
+const toggleFavorite = (item) => {
+  favorites.toggle(item)
+}
+</script>
+ 
 <template>
-  <ul class="music-list">
-    <li v-for="(item, index) in list" :key="item.id" class="music-item">
-      <img :src="item.cover" :alt="item.song" class="cover" @click="goDetail(item.id)" style="cursor:pointer;" />
-      <div class="info" @click="goDetail(item.id)" style="cursor:pointer;flex:1;">
-        <div class="song">{{ item.song }}</div>
-        <div class="singer">歌手：{{ item.singer }}</div>
-        <div class="album">专辑：{{ item.album }}</div>
-        <div class="time">发行时间：{{ item.time || '未知' }}</div>
-        <div class="quality">音质：{{ item.quality }}</div>
+  <div class="music-list">
+    <div
+      v-for="(item, index) in list"
+      :key="item.id"
+      class="music-item"
+    >
+      <img :src="item.cover || item.pic" class="music-cover" />
+      <div class="music-info">
+        <div class="music-song" @click="goDetail(item.id)">
+          {{ item.song || item.name }}
+        </div>
+        <div class="music-singer">{{ item.singer || item.ar_name }}</div>
+        <div class="music-album">{{ item.album || item.al_name }}</div>
       </div>
-      <button class="fav-btn" :class="{ liked: isFavorite(item.id) }" @click.stop="toggleFavorite(item.id)">
-        <span v-if="isFavorite(item.id)">❤️</span>
-        <span v-else>🤍</span>
-      </button>
       <button class="play-btn" @click="handlePlay(item, index)">
-        <van-icon name="play-circle" /></button>
-      <audio
-       v-if="audioMap[item.id]" 
-       :src="audioMap[item.id]" 
-       controls
-        style="width:120px;margin-left:8px;vertical-align:middle;display: none;"></audio>
-    </li>
-  </ul>
+        ▶️ 播放
+      </button>
+      <button
+        class="fav-btn"
+        :class="{ liked: favorites.isFavorite(item.id) }"
+        @click="toggleFavorite(item)"
+      >
+        {{ favorites.isFavorite(item.id) ? '❤️' : '🤍' }}
+      </button>
+    </div>
+  </div>
 </template>
 
-<script>
-import { searchMusicByIdVkeys } from '../api/music';
-
-export default {
-  name: 'MusicList',
-  props: {
-    list: {
-      type: Array,
-      default: () => []
-    }
-  },
-  data() {
-    return {
-      favoriteIds: JSON.parse(localStorage.getItem('favoriteMusicIds') || '[]'),
-      audioMap: {} // {id: url}
-    };
-  },
-  methods: {
-        playGlobal(item, index, url) {
-      // 触发全局播放器播放
-      this.$root.player = {
-        url: url,
-        song: item.name || item.song,
-        singer: item.singer || item.ar_name,
-        cover: item.cover || item.pic,
-        album: item.album || item.al_name,
-        quality: item.quality,
-        size: item.size,
-        interval: item.interval,
-        kbps: item.kbps,
-        id: item.id,
-        playIndex: index,           // 当前下标
-        playList: this.list         // 整个播放列表
-      };
-    },
-      async handlePlay(item, index) {
-        console.log("播放了",index)
-    // 先加载音乐 URL
-    const res = await searchMusicByIdVkeys(item.id);
-    let url = '';
-    if (res.data && res.data.code === 200 && res.data.data.url) {
-      url = res.data.data.url;
-      this.audioMap[item.id] = res.data.data.url;
-    } else {
-      this.audioMap[item.id] = '';
-    }
-
-    // 再触发全局播放
-    this.playGlobal(item, index, url);
-  },
-
-goDetail(id) {
-  this.$root.player = {
-    ...this.$root.player,
-    playList: this.list   //  把当前列表放到全局
-  };
-  this.$emit('go-detail', id);
-}
-,
-    isFavorite(id) {
-      return this.favoriteIds.includes(id);
-    },
-    toggleFavorite(id) {
-      const idx = this.favoriteIds.indexOf(id);
-      if (idx > -1) {
-        this.favoriteIds.splice(idx, 1);
-        // 从缓存中移除对应条目
-        try {
-          const cache = JSON.parse(localStorage.getItem('favoriteMusicCache') || '[]');
-          const newCache = cache.filter(s => s.id !== id);
-          localStorage.setItem('favoriteMusicCache', JSON.stringify(newCache));
-        } catch (e) {
-          console.warn('更新 favoriteMusicCache 时出错', e);
-        }
-      } else {
-        this.favoriteIds.push(id);
-        // 向缓存中添加基础信息（便于收藏页快速展示）
-        try {
-          const song = this.list.find(i => i.id === id);
-          if (song) {
-            const cache = JSON.parse(localStorage.getItem('favoriteMusicCache') || '[]');
-            // 只存必要字段，避免冗余
-            cache.unshift({
-              id: song.id,
-              song: song.song || song.name,
-              singer: song.singer || song.ar_name,
-              cover: song.cover || song.pic,
-              album: song.album || song.al_name,
-              quality: song.quality
-            });
-            localStorage.setItem('favoriteMusicCache', JSON.stringify(cache));
-          }
-        } catch (e) {
-          console.warn('更新 favoriteMusicCache 时出错', e);
-        }
-      }
-      localStorage.setItem('favoriteMusicIds', JSON.stringify(this.favoriteIds));
-      // 通知同页面其它组件刷新收藏显示
-      window.dispatchEvent(new CustomEvent('favorites-changed', { detail: this.favoriteIds }));
-      this.$emit('favorite-change', this.favoriteIds);
-    },
-
-  },
-  
-};
-</script>
-
 <style scoped>
-.play-btn {
-  background: #fff;
-  color: #42b983;
-  border: 1.5px solid #42b983;
+.music-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.music-item {
+  display: flex;
+  align-items: center;
+  padding: 12px;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  transition: all 0.3s ease;
+}
+
+.music-item:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(66, 185, 131, 0.2);
+}
+
+.music-cover {
+  width: 60px;
+  height: 60px;
   border-radius: 6px;
-  padding: 2px 10px;
-  font-size: 18px;
-  margin-left: 8px;
+  object-fit: cover;
+  margin-right: 15px;
+}
+
+.music-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.music-song {
+  font-weight: bold;
+  color: #2c3e50;
+  margin-bottom: 4px;
   cursor: pointer;
-  transition: background 0.2s, color 0.2s;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
-.play-btn:hover {
-  background: #42b983;
-  color: #fff;
+
+.music-song:hover {
+  color: #42b983;
 }
- .music-list {
-   list-style: none;
-   padding: 0;
-   margin: 0 auto;
-   max-width: 700px;
- }
- .music-item {
-   display: flex;
-   align-items: center;
-   background: #fff;
-   border-radius: 16px;
-   box-shadow: 0 2px 16px rgba(66,185,131,0.08);
-   margin-bottom: 18px;
-   padding: 18px 24px;
-   transition: box-shadow 0.2s, transform 0.2s;
-   border: none;
- }
- .music-item:hover {
-   box-shadow: 0 6px 32px rgba(66,185,131,0.18);
-   transform: translateY(-2px) scale(1.01);
- }
- .cover {
-   width: 80px;
-   height: 80px;
-   object-fit: cover;
-   border-radius: 12px;
-   margin-right: 24px;
-   box-shadow: 0 2px 8px rgba(66,185,131,0.10);
- }
- .info {
-   text-align: left;
-   flex: 1;
- }
- .song {
-   font-size: 22px;
-   font-weight: bold;
-   color: #2c3e50;
-   margin-bottom: 6px;
- }
- .singer {
-   font-size: 15px;
-   color: #42b983;
-   margin-top: 2px;
- }
- .album {
-   font-size: 15px;
-   color: #369870;
-   margin-top: 2px;
- }
- .time, .quality {
-   font-size: 14px;
-   color: #888;
-   margin-top: 2px;
- }
-.fav-btn {
-  background: none;
+
+.music-singer {
+  font-size: 14px;
+  color: #666;
+  margin-bottom: 2px;
+}
+
+.music-album {
+  font-size: 12px;
+  color: #999;
+}
+
+.play-btn {
+  padding: 8px 16px;
+  background: linear-gradient(135deg, #42b983 0%, #369870 100%);
   border: none;
-  font-size: 26px;
-  margin-left: 12px;
+  border-radius: 20px;
+  color: white;
   cursor: pointer;
-  outline: none;
-  transition: transform 0.1s;
+  margin-right: 10px;
+  transition: all 0.3s ease;
 }
+
+.play-btn:hover {
+  transform: scale(1.05);
+  box-shadow: 0 4px 12px rgba(66, 185, 131, 0.3);
+}
+
+.fav-btn {
+  padding: 8px 12px;
+  background: transparent;
+  border: 2px solid #ddd;
+  border-radius: 20px;
+  cursor: pointer;
+  font-size: 16px;
+  transition: all 0.3s ease;
+}
+
+.fav-btn:hover {
+  border-color: #42b983;
+}
+
 .fav-btn.liked {
-  color: #e74c3c;
-  transform: scale(1.15);
+  border-color: #e74c3c;
+  background: rgba(231, 76, 60, 0.1);
 }
 </style>
