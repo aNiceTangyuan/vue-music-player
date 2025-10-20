@@ -178,16 +178,42 @@ onBeforeRouteUpdate((to, from, next) => {
       <div v-if="loading" class="loading">加载中...</div>
       <div v-if="error" class="error">{{ error }}</div>
 
-      <div v-if="music" class="detail-content">
-        <div class="music-info-section">
-          <img :src="music.cover" class="music-cover-large" />
-          <div class="music-meta">
-            <h1>{{ music.name }}</h1>
-            <p class="music-artist">歌手：{{ music.singer }}</p>
-            <p class="music-album">专辑：{{ music.album }}</p>
-            <p class="music-quality">音质：{{ music.quality }}</p>
+      <div v-if="music" class="detail-content two-columns">
+        <!-- 左侧：上图下信息 -->
+        <div class="left-panel">
+          <img :src="music.pic || music.cover" class="cover-large" />
+          <div class="info-box">
+            <h1 class="title">{{ music.name }}</h1>
+            <p class="sub">歌手：{{ music.ar_name || music.singer }}</p>
+            <p class="sub">专辑：{{ music.al_name || music.album }}</p>
+            <p class="sub">音质：{{ music.quality }}</p>
+          </div>
+        </div>
 
-            <div class="quality-selector">
+        <!-- 右侧：上歌词，下音质选择 + 播放按钮 -->
+        <div class="right-panel">
+          <div
+            class="lyric-container"
+            @mouseenter="isHoverLyric = true"
+            @mouseleave="isHoverLyric = false"
+          >
+            <h2>🎤 歌词</h2>
+            <div v-if="parsedLyric.length === 0" class="no-lyric">
+              暂无歌词
+            </div>
+            <div v-else class="lyric-list">
+              <div
+                v-for="(line, idx) in parsedLyric"
+                :key="idx"
+                :class="['lyric-line', { active: idx === currentLine }]"
+              >
+                {{ line.text }}
+              </div>
+            </div>
+          </div>
+
+          <div class="controls-bar">
+            <div class="quality-selector inline">
               <label>选择音质：</label>
               <select v-model="selectedQuality">
                 <option
@@ -199,42 +225,23 @@ onBeforeRouteUpdate((to, from, next) => {
                 </option>
               </select>
             </div>
-                        <!-- 新增：播放按钮 -->
-            <button class="play-button" @click="handlePlayClick" :disabled="loading">
+
+            <button class="play-button" @click="handlePlayClick" :disabled="loading || !audioUrl">
               <svg v-if="!loading" viewBox="0 0 24 24" class="play-icon">
                 <path d="M8 5v14l11-7z" fill="currentColor" />
               </svg>
               <span v-if="loading" class="loading-spinner">⏳</span>
               <span>{{ loading ? '加载中...' : '播放音乐' }}</span>
             </button>
+
+            <!-- 隐藏的 audio，仅用于 timeupdate 驱动歌词（如不需要可移除） -->
             <audio
               v-if="audioUrl"
               :src="audioUrl"
               controls
-              class="audio-player"
+              class="audio-player hidden-audio"
               @timeupdate="handleLyric($event.target.currentTime)"
-              style="display: none;"
             />
-          </div>
-        </div>
-
-        <div
-          class="lyric-container"
-          @mouseenter="isHoverLyric = true"
-          @mouseleave="isHoverLyric = false"
-        >
-          <h2>🎤 歌词</h2>
-          <div v-if="parsedLyric.length === 0" class="no-lyric">
-            暂无歌词
-          </div>
-          <div v-else class="lyric-list">
-            <div
-              v-for="(line, idx) in parsedLyric"
-              :key="idx"
-              :class="['lyric-line', { active: idx === currentLine }]"
-            >
-              {{ line.text }}
-            </div>
           </div>
         </div>
       </div>
@@ -245,7 +252,6 @@ onBeforeRouteUpdate((to, from, next) => {
 <style scoped>
 .music-detail {
   display: flex;
-  min-height: 100vh;
 }
 
 .sidebar {
@@ -255,7 +261,9 @@ onBeforeRouteUpdate((to, from, next) => {
   padding: 40px 20px;
   position: sticky;
   top: 0;
-  height: 100vh;
+  height: 90vh;
+  box-sizing: border-box; /* 确保 padding 包含在宽度内 */
+  overflow-x: hidden; /* 防止水平溢出 */
 }
 
 .sidebar-title {
@@ -268,7 +276,7 @@ onBeforeRouteUpdate((to, from, next) => {
 .sidebar-btn {
   display: block;
   width: 100%;
-  padding: 12px 20px;
+  padding: 12px 16px; /* 减小左右 padding，防止超出 */
   margin-bottom: 15px;
   background: rgba(255, 255, 255, 0.15);
   border: 1px solid rgba(255, 255, 255, 0.3);
@@ -279,17 +287,22 @@ onBeforeRouteUpdate((to, from, next) => {
   transition: all 0.3s ease;
   text-align: center;
   text-decoration: none;
+  box-sizing: border-box; /* 确保 padding 和 border 包含在宽度内 */
 }
 
 .sidebar-btn:hover {
   background: rgba(255, 255, 255, 0.25);
-  transform: translateX(5px);
+  transform: translateX(3px); /* 减小移动距离 */
 }
 
 .main-content {
   flex: 1;
   padding: 30px;
   background: #f5f5f5;
+  display: flex;
+  flex-direction: column;
+  justify-content: center; /* 纵向居中主要内容 */
+  overflow-y: auto; /* 允许内容滚动 */
 }
 
 .loading,
@@ -303,54 +316,61 @@ onBeforeRouteUpdate((to, from, next) => {
   color: #e74c3c;
 }
 
-.detail-content {
+.detail-content.two-columns {
+  display: grid;
+  grid-template-columns: 240px 1fr; /* 左侧缩窄 */
+  gap: 32px;
+  align-items: start; /* 改为顶部对齐，避免过度拉伸 */
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+  padding: 28px;
+  max-width: 1100px; /* 缩小整体宽度 */
+  max-height: 85vh; /* 限制最大高度不超过视口 */
+  margin: 0 auto;
+  overflow: hidden; /* 防止内容溢出 */
+}
+
+/* 左侧信息栏 */
+.left-panel {
   display: flex;
   flex-direction: column;
-  gap: 30px;
+  align-items: stretch;
 }
-
-.music-info-section {
-  display: flex;
-  gap: 30px;
-  background: white;
-  padding: 30px;
-  border-radius: 12px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-}
-
-.music-cover-large {
-  width: 250px;
-  height: 250px;
-  border-radius: 12px;
+.cover-large {
+  width: 100%;
+  aspect-ratio: 1/1;
+  border-radius: 10px;
   object-fit: cover;
+  margin-bottom: 12px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
 }
-
-.music-meta {
-  flex: 1;
-}
-
-.music-meta h1 {
-  margin: 0 0 15px 0;
+.info-box .title {
+  margin: 0 0 8px 0;
   color: #2c3e50;
+  font-size: 18px;
+  line-height: 1.3;
+  font-weight: 600;
 }
-
-.music-artist,
-.music-album,
-.music-quality {
-  margin: 8px 0;
+.info-box .sub {
+  margin: 4px 0;
   color: #666;
-  font-size: 16px;
+  font-size: 13px;
+  line-height: 1.6;
 }
 
-.quality-selector {
-  margin: 20px 0;
+/* 右侧大区域 */
+.right-panel { 
+  display: flex; 
+  flex-direction: column; 
+  align-items: center; /* 让内容居中 */
+  gap: 14px;
+  max-height: calc(85vh - 80px); /* 适配父容器高度限制 */
+  overflow: visible;
 }
 
-.quality-selector label {
-  margin-right: 10px;
-  font-weight: bold;
-}
-
+/* 质量选择公用样式 */
+.quality-selector.inline { display: flex; align-items: center; gap: 10px; }
 .quality-selector select {
   padding: 8px 12px;
   border: 2px solid #42b983;
@@ -359,23 +379,45 @@ onBeforeRouteUpdate((to, from, next) => {
   cursor: pointer;
 }
 
-.audio-player {
-  width: 100%;
-  margin-top: 20px;
-}
+.audio-player { width: 100%; margin-top: 10px; }
+.hidden-audio { display: none; }
 
 .lyric-container {
-  background: white;
-  padding: 30px;
-  border-radius: 12px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-  max-height: 500px;
+  width: 85%; /* 缩小宽度 */
+  padding: 18px;
+  min-height: 240px;
+  max-height: calc(85vh - 220px); /* 动态计算，确保不超屏 */
   overflow-y: auto;
+  background: #fafbfc;
+  border: 1.5px solid rgba(66, 185, 131, 0.2);
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
 }
 
 .lyric-container h2 {
-  margin: 0 0 20px 0;
+  margin: 0 0 16px 0;
   color: #2c3e50;
+  font-size: 17px;
+  font-weight: 600;
+  text-align: center;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(66, 185, 131, 0.15);
+}
+
+/* 自定义滚动条 */
+.lyric-container::-webkit-scrollbar {
+  width: 6px;
+}
+.lyric-container::-webkit-scrollbar-track {
+  background: rgba(0,0,0,0.05);
+  border-radius: 3px;
+}
+.lyric-container::-webkit-scrollbar-thumb {
+  background: rgba(66, 185, 131, 0.3);
+  border-radius: 3px;
+}
+.lyric-container::-webkit-scrollbar-thumb:hover {
+  background: rgba(66, 185, 131, 0.5);
 }
 
 .no-lyric {
@@ -387,38 +429,86 @@ onBeforeRouteUpdate((to, from, next) => {
 .lyric-list {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 6px;
 }
 
 .lyric-line {
-  padding: 8px 12px;
-  border-radius: 6px;
+  padding: 6px 10px;
+  border-radius: 5px;
   transition: all 0.3s ease;
   color: #666;
+  font-size: 14px;
+  line-height: 1.6;
 }
 
 .lyric-line.active {
   background: linear-gradient(135deg, #42b983 0%, #369870 100%);
   color: white;
   font-weight: bold;
-  transform: scale(1.05);
+  transform: scale(1.03);
+}
+
+/* 右侧底部控制栏 */
+.controls-bar {
+  width: 85%; /* 与歌词卡片同宽 */
+  padding: 16px 20px;
+  background: #fafbfc;
+  border: 1.5px solid rgba(66, 185, 131, 0.2);
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+}
+
+.play-button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 24px;
+  background: linear-gradient(135deg, #42b983 0%, #369870 100%);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 15px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 12px rgba(66, 185, 131, 0.3);
+}
+
+.play-button:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(66, 185, 131, 0.4);
+}
+
+.play-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.play-icon {
+  width: 20px;
+  height: 20px;
 }
 
 @media (max-width: 768px) {
-  .music-detail {
-    flex-direction: column;
-  }
+  .music-detail { flex-direction: column; }
   .sidebar {
     width: 100%;
     height: auto;
     position: relative;
   }
-  .music-info-section {
-    flex-direction: column;
+  .main-content { 
+    min-height: auto; 
+    justify-content: flex-start;
+    padding: 20px;
   }
-  .music-cover-large {
-    width: 100%;
-    height: auto;
+  .detail-content.two-columns {
+    grid-template-columns: 1fr;
+    padding: 24px;
+    gap: 20px;
   }
 }
 </style>

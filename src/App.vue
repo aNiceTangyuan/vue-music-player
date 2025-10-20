@@ -28,7 +28,6 @@ const player = usePlayerStore()
 /* =================== 全局布局 =================== */
 #app-layout {
   display: flex;
-  min-height: 100vh;
   background: linear-gradient(120deg, #eafaf3 0%, #fff 100%);
   color: #2c3e50;
   font-family: Avenir, Helvetica, Arial, sans-serif;
@@ -40,6 +39,8 @@ const player = usePlayerStore()
   background: linear-gradient(180deg, #42b983 0%, #369870 100%);
   color: #fff;
   padding: 40px 20px;
+  box-sizing: border-box; /* 确保 padding 包含在宽度内 */
+  overflow-x: hidden; /* 防止水平溢出 */
 }
 
 .sidebar-title {
@@ -52,7 +53,7 @@ const player = usePlayerStore()
 .sidebar-btn {
   display: block;
   width: 100%;
-  padding: 12px 20px;
+  padding: 12px 16px; /* 减小左右 padding，防止超出 */
   margin-bottom: 15px;
   background: rgba(255, 255, 255, 0.15);
   border: 1px solid rgba(255, 255, 255, 0.3);
@@ -63,11 +64,12 @@ const player = usePlayerStore()
   transition: all 0.3s ease;
   text-align: center;
   text-decoration: none;
+  box-sizing: border-box; /* 确保 padding 和 border 包含在宽度内 */
 }
 
 .sidebar-btn:hover {
   background: rgba(255, 255, 255, 0.25);
-  transform: translateX(5px);
+  transform: translateX(3px); /* 减小移动距离 */
 }
 
 /* ✅ 主体内容 */

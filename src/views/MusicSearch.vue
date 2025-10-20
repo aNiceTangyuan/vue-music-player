@@ -118,23 +118,23 @@ onMounted(() => {
         </button>
       </div>
 
-      <div v-if="error" style="color: red; text-align: center; margin-top: 20px;">
+      <div v-if="error" class="error-message">
         {{ error }}
       </div>
 
-      <div v-if="results.length > 0">
+      <div v-if="results.length > 0" class="results-container">
         <h2 style="margin: 20px 0;">搜索结果：</h2>
         <MusicList :list="results" @go-detail="handleGoDetail" />
       </div>
 
-      <div v-if="resultById">
+      <div v-if="resultById" class="results-container">
         <h2 style="margin: 20px 0;">歌曲详情：</h2>
         <div class="music-detail-card">
-          <img :src="resultById.pic" class="detail-cover" />
+          <img :src="resultById.cover" class="detail-cover" />
           <div class="detail-info">
-            <h3>{{ resultById.name }}</h3>
-            <p>歌手：{{ resultById.ar_name }}</p>
-            <p>专辑：{{ resultById.al_name }}</p>
+            <h3>{{ resultById.song }}</h3>
+            <p>歌手：{{ resultById.singer }}</p>
+            <p>专辑：{{ resultById.album }}</p>
             <p>音质：{{ resultById.quality }}</p>
             <button
               class="fav-btn"
@@ -165,6 +165,8 @@ onMounted(() => {
   position: sticky;
   top: 0;
   height: 100vh;
+  box-sizing: border-box; /* 确保 padding 包含在宽度内 */
+  overflow-x: hidden; /* 防止水平溢出 */
 }
 
 .sidebar-title {
@@ -177,7 +179,7 @@ onMounted(() => {
 .sidebar-btn {
   display: block;
   width: 100%;
-  padding: 12px 20px;
+  padding: 12px 16px; /* 减小左右 padding，防止超出 */
   margin-bottom: 15px;
   background: rgba(255, 255, 255, 0.15);
   border: 1px solid rgba(255, 255, 255, 0.3);
@@ -188,18 +190,24 @@ onMounted(() => {
   transition: all 0.3s ease;
   text-align: center;
   text-decoration: none;
+  box-sizing: border-box; /* 确保 padding 和 border 包含在宽度内 */
 }
 
 .sidebar-btn:hover {
   background: rgba(255, 255, 255, 0.25);
-  transform: translateX(5px);
+  transform: translateX(3px); /* 减小移动距离 */
 }
 
 /* ======================= 主体内容区域 ======================= */
 .main-content {
-  flex: 1;
   padding: 30px;
   background: #f5f5f5;
+  display: flex;
+  flex-direction: column;
+  align-items: center; /* 水平居中内容 */
+  overflow-y: auto;
+  width: calc(100vw - 220px); /* 精准填满侧栏右侧 */
+  justify-content: center;
 }
 
 /* 顶部搜索栏居中 */
@@ -209,6 +217,8 @@ onMounted(() => {
   align-items: center;
   gap: 10px;
   margin-bottom: 30px;
+  width: 100%;
+  max-width: 1000px;
   animation: fadeInDown 0.6s ease;
 }
 
@@ -252,6 +262,26 @@ onMounted(() => {
 .search-btn:hover {
   transform: translateY(-2px);
   box-shadow: 0 4px 12px rgba(66, 185, 131, 0.4);
+}
+
+/* 错误提示 */
+.error-message {
+  color: #e74c3c;
+  text-align: center;
+  margin-top: 20px;
+  padding: 15px;
+  background: rgba(231, 76, 60, 0.1);
+  border-radius: 8px;
+  font-size: 16px;
+  width: 100%;
+  max-width: 1000px;
+}
+
+/* 搜索结果容器 */
+.results-container {
+  width: 100%;
+  max-width: 1200px;
+  animation: fadeIn 0.5s ease;
 }
 
 .music-detail-card {
@@ -314,10 +344,20 @@ onMounted(() => {
   }
 }
 
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
 /* 响应式适配 */
 @media (max-width: 768px) {
   #music-search {
     flex-direction: column;
+    justify-content: center;
   }
   .sidebar {
     width: 100%;
