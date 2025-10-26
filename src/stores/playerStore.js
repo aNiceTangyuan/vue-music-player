@@ -14,7 +14,8 @@ export const usePlayerStore = defineStore('playerStore', {
     playMode: 'order', // order, random, single
     playedSet: new Set(),
     volume: 1,
-    isPlaying: false
+    isPlaying: false,
+    currentTime: 0
   }),
   
   actions: {
@@ -95,6 +96,10 @@ export const usePlayerStore = defineStore('playerStore', {
     setPlayList(list, startIndex = 0) {
       this.playList = list
       this.playIndex = startIndex
+    },
+    
+    updateCurrentTime(time) {
+      this.currentTime = time
     }
   }
 })

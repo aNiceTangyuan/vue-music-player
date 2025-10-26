@@ -13,6 +13,7 @@
       @prev="player.playPrev()"
       @next="player.playNext()"
       @togglePlayMode="player.togglePlayMode()"
+      @timeupdate="player.updateCurrentTime"
     />
   </div>
 </template>
@@ -27,10 +28,11 @@ const player = usePlayerStore()
 <style>
 /* =================== 全局布局 =================== */
 #app-layout {
-  display: flex;
+  display: block;
   background: linear-gradient(120deg, #eafaf3 0%, #fff 100%);
   color: #2c3e50;
   font-family: Avenir, Helvetica, Arial, sans-serif;
+  min-height: 100vh;
 }
 
 /* ✅ 侧边栏样式（常驻） */

@@ -23,6 +23,31 @@ const lyric = ref('')
 const parsedLyric = ref([])
 const currentLine = ref(0)
 const isHoverLyric = ref(false)
+const retryCount = ref(0) // 当前重试次数
+const maxRetries = 20 // 最大重试次数
+
+// 通用重试函数
+async function retryRequest(requestFn, maxAttempts = maxRetries, delay = 1000) {
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    retryCount.value = attempt
+    try {
+      const result = await requestFn()
+      retryCount.value = 0 // 成功后重置计数
+      return result
+    } catch (err) {
+      console.warn(`请求失败 (第 ${attempt}/${maxAttempts} 次)`, err)
+      
+      if (attempt === maxAttempts) {
+        retryCount.value = 0
+        throw err // 达到最大重试次数，抛出错误
+      }
+      
+      // 等待一段时间后重试（可以使用指数退避策略）
+      const waitTime = Math.min(delay * attempt, 5000) // 最多等待5秒
+      await new Promise(resolve => setTimeout(resolve, waitTime))
+    }
+  }
+}
 
 async function fetchMusicData(id) {
   loading.value = true
@@ -31,27 +56,31 @@ async function fetchMusicData(id) {
   audioUrl.value = ''
 
   try {
-    const res = await searchMusicByIdVkeys(id)
+    const res = await retryRequest(async () => {
+      const response = await searchMusicByIdVkeys(id)
+      // 检查响应是否成功
+      if (!response.data || response.data.code !== 200) {
+        throw new Error('响应数据异常')
+      }
+      return response
+    })
+    
     console.log(res)
-    if (res.data && res.data.code === 200) {
-      music.value = res.data.data
-      console.log(music.value)
-      audioUrl.value = res.data.data.url || ''
-      
-      // 同时更新全局播放器
-      // if (audioUrl.value) {
-      //   player.url = audioUrl.value
-      //   player.song = music.value.song
-      //   player.singer = music.value.singer
-      //   player.cover = music.value.cover
-      //   player.id = music.value.id
-      // }
-    } else {
-      error.value = '未找到该歌曲'
-    }
+    music.value = res.data.data
+    console.log(music.value)
+    audioUrl.value = res.data.data.url || ''
+    
+    // 同时更新全局播放器
+    // if (audioUrl.value) {
+    //   player.url = audioUrl.value
+    //   player.song = music.value.song
+    //   player.singer = music.value.singer
+    //   player.cover = music.value.cover
+    //   player.id = music.value.id
+    // }
   } catch (err) {
-    console.error(err)
-    error.value = '加载失败'
+    console.error('音乐数据加载失败（已重试20次）', err)
+    error.value = `加载失败，已尝试 ${maxRetries} 次`
   } finally {
     loading.value = false
   }
@@ -74,13 +103,20 @@ function handlePlayClick() {
 
 async function fetchLyricByIdFn(id) {
   try {
-    const res = await fetchLyricById(id)
-    if (res.data && res.data.code === 200) {
-      lyric.value = res.data.data.lrc
-      parsedLyric.value = parseLRC(lyric.value)
-    }
+    const res = await retryRequest(async () => {
+      const response = await fetchLyricById(id)
+      // 检查响应是否成功
+      if (!response.data || response.data.code !== 200) {
+        throw new Error('歌词响应数据异常')
+      }
+      return response
+    })
+    
+    lyric.value = res.data.data.lrc
+    parsedLyric.value = parseLRC(lyric.value)
   } catch (err) {
-    console.warn('歌词加载失败', err)
+    console.warn(`歌词加载失败（已重试${maxRetries}次）`, err)
+    // 歌词加载失败不影响主要功能，所以不显示错误
   }
 }
 
@@ -154,6 +190,13 @@ watch(() => route.params.id, (newId) => {
   if (newId) fetchAndPlay()
 })
 
+// 监听全局播放器的时间更新来同步歌词
+watch(() => player.currentTime, (newTime) => {
+  if (player.id === music.value?.id) {
+    handleLyric(newTime)
+  }
+})
+
 onMounted(() => {
       fetchAndPlay()
 })
@@ -175,15 +218,21 @@ onBeforeRouteUpdate((to, from, next) => {
     </div>
 
     <div class="main-content">
-      <div v-if="loading" class="loading">加载中...</div>
+      <div v-if="loading" class="loading">
+        {{ retryCount > 0 ? `加载中...（第 ${retryCount} 次尝试）` : '加载中...' }}
+      </div>
       <div v-if="error" class="error">{{ error }}</div>
 
       <div v-if="music" class="detail-content two-columns">
         <!-- 左侧：上图下信息 -->
         <div class="left-panel">
-          <img :src="music.pic || music.cover" class="cover-large" />
+          <div class="cover-section">
+            <img :src="music.pic || music.cover" class="cover-large" />
+            
+          </div>
+          
           <div class="info-box">
-            <h1 class="title">{{ music.name }}</h1>
+            <h1 class="song-title">{{ music.singer }}</h1>
             <p class="sub">歌手：{{ music.ar_name || music.singer }}</p>
             <p class="sub">专辑：{{ music.al_name || music.album }}</p>
             <p class="sub">音质：{{ music.quality }}</p>
@@ -234,14 +283,6 @@ onBeforeRouteUpdate((to, from, next) => {
               <span>{{ loading ? '加载中...' : '播放音乐' }}</span>
             </button>
 
-            <!-- 隐藏的 audio，仅用于 timeupdate 驱动歌词（如不需要可移除） -->
-            <audio
-              v-if="audioUrl"
-              :src="audioUrl"
-              controls
-              class="audio-player hidden-audio"
-              @timeupdate="handleLyric($event.target.currentTime)"
-            />
           </div>
         </div>
       </div>
@@ -252,6 +293,8 @@ onBeforeRouteUpdate((to, from, next) => {
 <style scoped>
 .music-detail {
   display: flex;
+  height: 100vh; /* 填满屏幕高度 */
+  overflow: hidden; /* 防止整体滚动 */
 }
 
 .sidebar {
@@ -261,7 +304,7 @@ onBeforeRouteUpdate((to, from, next) => {
   padding: 40px 20px;
   position: sticky;
   top: 0;
-  height: 90vh;
+  height: 100vh; /* 填满屏幕高度 */
   box-sizing: border-box; /* 确保 padding 包含在宽度内 */
   overflow-x: hidden; /* 防止水平溢出 */
 }
@@ -297,12 +340,15 @@ onBeforeRouteUpdate((to, from, next) => {
 
 .main-content {
   flex: 1;
-  padding: 30px;
+  padding: 20px 30px 120px 30px; /* 增加底部padding，预留播放器空间 */
   background: #f5f5f5;
   display: flex;
   flex-direction: column;
   justify-content: center; /* 纵向居中主要内容 */
+  align-items: center; /* 水平居中主要内容 */
   overflow-y: auto; /* 允许内容滚动 */
+  height: 100vh; /* 填满屏幕高度 */
+  box-sizing: border-box;
 }
 
 .loading,
@@ -318,17 +364,19 @@ onBeforeRouteUpdate((to, from, next) => {
 
 .detail-content.two-columns {
   display: grid;
-  grid-template-columns: 240px 1fr; /* 左侧缩窄 */
-  gap: 32px;
-  align-items: start; /* 改为顶部对齐，避免过度拉伸 */
+  grid-template-columns: 300px 1fr; /* 增加左侧宽度 */
+  gap: 40px;
+  align-items: center; /* 让两列在y轴居中 */
   background: #fff;
   border-radius: 16px;
   box-shadow: 0 8px 24px rgba(0,0,0,0.12);
-  padding: 28px;
-  max-width: 1100px; /* 缩小整体宽度 */
-  max-height: 85vh; /* 限制最大高度不超过视口 */
+  padding: 40px;
+  max-width: 90%; /* 增加卡片宽度，占据90%的容器宽度 */
+  width: 100%;
+  max-height: calc(100vh - 220px); /* 进一步减少高度，确保不被遮挡 */
   margin: 0 auto;
   overflow: hidden; /* 防止内容溢出 */
+  min-height: 500px; /* 设置固定最小高度 */
 }
 
 /* 左侧信息栏 */
@@ -336,26 +384,47 @@ onBeforeRouteUpdate((to, from, next) => {
   display: flex;
   flex-direction: column;
   align-items: stretch;
+  justify-content: center; /* y轴居中 */
+  height: 100%;
 }
+
+.cover-section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
 .cover-large {
   width: 100%;
   aspect-ratio: 1/1;
   border-radius: 10px;
   object-fit: cover;
-  margin-bottom: 12px;
+  margin-bottom: 16px;
   box-shadow: 0 4px 12px rgba(0,0,0,0.15);
 }
+
+.song-title {
+  margin: 0;
+  color: #2c3e50;
+  font-size: 24px; /* 增加字体大小 */
+  line-height: 1.3;
+  font-weight: bold;
+  text-align: center;
+  word-break: break-word;
+}
+
 .info-box .title {
   margin: 0 0 8px 0;
   color: #2c3e50;
-  font-size: 18px;
+  font-size: 20px; /* 增加字体大小 */
   line-height: 1.3;
   font-weight: 600;
 }
 .info-box .sub {
-  margin: 4px 0;
+  margin: 6px 0; /* 增加间距 */
   color: #666;
-  font-size: 13px;
+  font-size: 15px; /* 增加字体大小 */
   line-height: 1.6;
 }
 
@@ -363,10 +432,12 @@ onBeforeRouteUpdate((to, from, next) => {
 .right-panel { 
   display: flex; 
   flex-direction: column; 
-  align-items: center; /* 让内容居中 */
-  gap: 14px;
-  max-height: calc(85vh - 80px); /* 适配父容器高度限制 */
+  align-items: center; /* 让内容居中 */ 
+  justify-content: center; /* y轴居中 */
+  gap: 20px;
+  max-height: calc(100vh - 300px); /* 适配父容器高度限制，预留播放栏空间 */
   overflow: visible;
+  height: 100%;
 }
 
 /* 质量选择公用样式 */
@@ -383,10 +454,10 @@ onBeforeRouteUpdate((to, from, next) => {
 .hidden-audio { display: none; }
 
 .lyric-container {
-  width: 85%; /* 缩小宽度 */
-  padding: 18px;
-  min-height: 240px;
-  max-height: calc(85vh - 220px); /* 动态计算，确保不超屏 */
+  width: 95%; /* 增加宽度 */
+  padding: 24px;
+  min-height: 300px;
+  max-height: calc(100vh - 420px); /* 动态计算，确保不超屏且不被播放栏遮挡 */
   overflow-y: auto;
   background: #fafbfc;
   border: 1.5px solid rgba(66, 185, 131, 0.2);
@@ -395,12 +466,12 @@ onBeforeRouteUpdate((to, from, next) => {
 }
 
 .lyric-container h2 {
-  margin: 0 0 16px 0;
+  margin: 0 0 20px 0;
   color: #2c3e50;
-  font-size: 17px;
+  font-size: 20px; /* 增加标题字体大小 */
   font-weight: 600;
   text-align: center;
-  padding-bottom: 12px;
+  padding-bottom: 16px;
   border-bottom: 1px solid rgba(66, 185, 131, 0.15);
 }
 
@@ -433,12 +504,12 @@ onBeforeRouteUpdate((to, from, next) => {
 }
 
 .lyric-line {
-  padding: 6px 10px;
-  border-radius: 5px;
+  padding: 8px 12px; /* 增加内边距 */
+  border-radius: 6px;
   transition: all 0.3s ease;
   color: #666;
-  font-size: 14px;
-  line-height: 1.6;
+  font-size: 16px; /* 增加字体大小 */
+  line-height: 1.8;
 }
 
 .lyric-line.active {
@@ -450,8 +521,8 @@ onBeforeRouteUpdate((to, from, next) => {
 
 /* 右侧底部控制栏 */
 .controls-bar {
-  width: 85%; /* 与歌词卡片同宽 */
-  padding: 16px 20px;
+  width: 95%; /* 与歌词卡片同宽 */
+  padding: 18px 24px;
   background: #fafbfc;
   border: 1.5px solid rgba(66, 185, 131, 0.2);
   border-radius: 12px;

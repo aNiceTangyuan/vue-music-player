@@ -15,6 +15,31 @@ const results = ref([])
 const resultById = ref(null)
 const loading = ref(false)
 const error = ref('')
+const retryCount = ref(0) // 当前重试次数
+const maxRetries = 20 // 最大重试次数
+
+// 通用重试函数
+async function retryRequest(requestFn, maxAttempts = maxRetries, delay = 1000) {
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    retryCount.value = attempt
+    try {
+      const result = await requestFn()
+      retryCount.value = 0 // 成功后重置计数
+      return result
+    } catch (err) {
+      console.warn(`请求失败 (第 ${attempt}/${maxAttempts} 次)`, err)
+      
+      if (attempt === maxAttempts) {
+        retryCount.value = 0
+        throw err // 达到最大重试次数，抛出错误
+      }
+      
+      // 等待一段时间后重试（指数退避策略）
+      const waitTime = Math.min(delay * attempt, 5000) // 最多等待5秒
+      await new Promise(resolve => setTimeout(resolve, waitTime))
+    }
+  }
+}
 
 // 统一搜索处理
 const handleSearchUnified = async () => {
@@ -30,39 +55,47 @@ const handleSearchUnified = async () => {
 
   try {
     if (searchType.value === 'word') {
-      const res = await searchMusic(searchInput.value)
-      if (res.data && res.data.code === 200) {
-        results.value = res.data.data || []
-        // 保存搜索状态
-        localStorage.setItem('musicSearchState', JSON.stringify({
-          searchType: searchType.value,
-          searchInput: searchInput.value,
-          results: results.value
-        }))
-      } else {
-        error.value = '搜索失败，请重试'
-      }
+      const res = await retryRequest(async () => {
+        const response = await searchMusic(searchInput.value)
+        // 检查响应是否成功
+        if (!response.data || response.data.code !== 200) {
+          throw new Error('搜索响应数据异常')
+        }
+        return response
+      })
+      
+      results.value = res.data.data || []
+      // 保存搜索状态
+      localStorage.setItem('musicSearchState', JSON.stringify({
+        searchType: searchType.value,
+        searchInput: searchInput.value,
+        results: results.value
+      }))
     } else if (searchType.value === 'id') {
       let id = searchInput.value.trim()
       const urlMatch = id.match(/id=(\d+)/)
       if (urlMatch) id = urlMatch[1]
 
-      const res = await searchMusicByIdVkeys(id)
-      if (res.data && res.data.code === 200) {
-        resultById.value = res.data.data
-        // 保存搜索状态
-        localStorage.setItem('musicSearchState', JSON.stringify({
-          searchType: searchType.value,
-          searchInput: searchInput.value,
-          resultById: resultById.value
-        }))
-      } else {
-        error.value = '未找到该歌曲'
-      }
+      const res = await retryRequest(async () => {
+        const response = await searchMusicByIdVkeys(id)
+        // 检查响应是否成功
+        if (!response.data || response.data.code !== 200) {
+          throw new Error('ID搜索响应数据异常')
+        }
+        return response
+      })
+      
+      resultById.value = res.data.data
+      // 保存搜索状态
+      localStorage.setItem('musicSearchState', JSON.stringify({
+        searchType: searchType.value,
+        searchInput: searchInput.value,
+        resultById: resultById.value
+      }))
     }
   } catch (err) {
-    console.error(err)
-    error.value = '网络错误，请重试'
+    console.error(`搜索失败（已重试${maxRetries}次）`, err)
+    error.value = `搜索失败，已尝试 ${maxRetries} 次，请稍后再试`
   } finally {
     loading.value = false
   }
@@ -114,7 +147,7 @@ onMounted(() => {
         />
 
         <button @click="handleSearchUnified" class="search-btn">
-          {{ loading ? '搜索中...' : '搜索' }}
+          {{ loading ? (retryCount > 0 ? `搜索中...(第 ${retryCount} 次尝试)` : '搜索中...') : '搜索' }}
         </button>
       </div>
 
