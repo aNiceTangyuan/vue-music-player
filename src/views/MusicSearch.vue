@@ -2,11 +2,16 @@
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useFavoritesStore } from '@/stores/favoritesStore'
+import { usePlaylistStore } from '@/stores/playlistStore'
 import { searchMusic, searchMusicByIdVkeys } from '../api/music'
 import MusicList from '../components/MusicList.vue'
+import Sidebar from '../components/Sidebar.vue'
+import { ElMessage } from 'element-plus'
+import { FolderAdd } from '@element-plus/icons-vue'
 
 const router = useRouter()
 const favorites = useFavoritesStore()
+const playlistStore = usePlaylistStore()
 
 // 响应式数据
 const searchType = ref('word')
@@ -17,6 +22,8 @@ const loading = ref(false)
 const error = ref('')
 const retryCount = ref(0) // 当前重试次数
 const maxRetries = 20 // 最大重试次数
+const playlistDialogVisible = ref(false) // 歌单对话框显示状态
+const currentPlaylist = ref(null) // 当前选中的歌单
 
 // 通用重试函数
 async function retryRequest(requestFn, maxAttempts = maxRetries, delay = 1000) {
@@ -106,6 +113,33 @@ const handleGoDetail = (id) => {
   router.push({ path: `/music/${id}` })
 }
 
+// 添加歌曲到歌单
+const addToPlaylist = (song, playlistId) => {
+  const success = playlistStore.addSongToPlaylist(playlistId, song)
+  const playlist = playlistStore.getPlaylistById(playlistId)
+  if (success) {
+    ElMessage.success(`已添加到歌单 "${playlist?.name}"`)
+  } else {
+    ElMessage.warning(`歌曲已在歌单 "${playlist?.name}" 中`)
+  }
+}
+
+// 关闭歌单对话框
+const closePlaylistDialog = () => {
+  playlistDialogVisible.value = false
+  currentPlaylist.value = null
+}
+
+// 从歌单中删除歌曲
+const removeSongFromPlaylist = (songId) => {
+  if (currentPlaylist.value) {
+    playlistStore.removeSongFromPlaylist(currentPlaylist.value.id, songId)
+    // 更新当前歌单引用
+    currentPlaylist.value = playlistStore.getPlaylistById(currentPlaylist.value.id)
+    ElMessage.success('已从歌单中移除')
+  }
+}
+
 // 组件挂载时恢复搜索状态
 onMounted(() => {
   const saved = localStorage.getItem('musicSearchState')
@@ -125,30 +159,31 @@ onMounted(() => {
  
 <template>
   <div id="music-search">
-    <div class="sidebar">
-      <h2 class="sidebar-title">🎵 音乐世界</h2>
-      <router-link to="/" class="sidebar-btn">🔍 搜索音乐</router-link>
-      <router-link to="/favorites" class="sidebar-btn">❤️ 喜欢的音乐</router-link>
-    </div>
+    <Sidebar />
 
     <div class="main-content">
       <div class="search-bar">
-        <select v-model="searchType" class="search-type-select">
-          <option value="word">按歌曲名/歌手</option>
-          <option value="id">按歌曲ID</option>
-        </select>
-
-        <input
+        <el-input
           v-model="searchInput"
-          type="text"
           class="search-input"
           :placeholder="searchType === 'word' ? '输入歌曲名或歌手...' : '输入歌曲ID或链接...'"
+          clearable
           @keyup.enter="handleSearchUnified"
         />
 
-        <button @click="handleSearchUnified" class="search-btn">
-          {{ loading ? (retryCount > 0 ? `搜索中...(第 ${retryCount} 次尝试)` : '搜索中...') : '搜索' }}
-        </button>
+        <el-dropdown split-button type="primary" @click="handleSearchUnified" class="search-dropdown">
+          {{ loading ? (retryCount > 0 ? `搜索中...(第 ${retryCount} 次尝试)` : '搜索中...') : '🔍 搜索' }}
+          <template #dropdown>
+            <el-dropdown-menu>
+              <el-dropdown-item @click="searchType = 'word'">
+                {{ searchType === 'word' ? '✓ ' : '' }}按歌曲名/歌手
+              </el-dropdown-item>
+              <el-dropdown-item @click="searchType = 'id'">
+                {{ searchType === 'id' ? '✓ ' : '' }}按歌曲ID
+              </el-dropdown-item>
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
       </div>
 
       <div v-if="error" class="error-message">
@@ -169,17 +204,94 @@ onMounted(() => {
             <p>歌手：{{ resultById.singer }}</p>
             <p>专辑：{{ resultById.album }}</p>
             <p>音质：{{ resultById.quality }}</p>
-            <button
-              class="fav-btn"
-              :class="{ liked: favorites.isFavorite(resultById.id) }"
-              @click="favorites.toggle(resultById)"
-            >
-              {{ favorites.isFavorite(resultById.id) ? '❤️ 已收藏' : '🤍 收藏' }}
-            </button>
+            <div class="detail-actions">
+              <button
+                class="fav-btn"
+                :class="{ liked: favorites.isFavorite(resultById.id) }"
+                @click="favorites.toggle(resultById)"
+              >
+                {{ favorites.isFavorite(resultById.id) ? '❤️ 已收藏' : '🤍 收藏' }}
+              </button>
+              
+              <!-- 加入歌单下拉菜单 -->
+              <el-dropdown trigger="click" @command="(playlistId) => addToPlaylist(resultById, playlistId)">
+                <button class="playlist-btn-detail">
+                  <el-icon style="margin-right: 4px;"><folder-add /></el-icon>
+                  加入歌单
+                </button>
+                <template #dropdown>
+                  <el-dropdown-menu>
+                    <el-dropdown-item v-if="playlistStore.playlists.length === 0" disabled>
+                      <span style="color: #999;">暂无歌单，请先创建</span>
+                    </el-dropdown-item>
+                    <el-dropdown-item 
+                      v-for="playlist in playlistStore.playlists" 
+                      :key="playlist.id"
+                      :command="playlist.id"
+                    >
+                      📝 {{ playlist.name }} ({{ playlist.songs.length }})
+                    </el-dropdown-item>
+                  </el-dropdown-menu>
+                </template>
+              </el-dropdown>
+            </div>
           </div>
         </div>
       </div>
     </div>
+
+    <!-- 歌单详情对话框 -->
+    <el-dialog 
+      v-model="playlistDialogVisible" 
+      :title="currentPlaylist?.name || '歌单详情'"
+      width="80%"
+      :close-on-click-modal="false"
+    >
+      <div v-if="currentPlaylist" class="playlist-dialog-content">
+        <div class="playlist-info">
+          <p class="playlist-count">共 {{ currentPlaylist.songs.length }} 首歌曲</p>
+        </div>
+        
+        <div v-if="currentPlaylist.songs.length === 0" class="empty-playlist">
+          暂无歌曲，快去添加吧！
+        </div>
+        
+        <div v-else class="playlist-songs">
+          <div 
+            v-for="(song, index) in currentPlaylist.songs" 
+            :key="song.id"
+            class="song-item"
+          >
+            <div class="song-index">{{ index + 1 }}</div>
+            <img :src="song.cover || song.pic" class="song-cover" />
+            <div class="song-info">
+              <div class="song-name">{{ song.song || song.name }}</div>
+              <div class="song-artist">{{ song.singer || song.ar_name }}</div>
+            </div>
+            <div class="song-actions">
+              <el-button 
+                type="primary" 
+                size="small" 
+                @click="handleGoDetail(song.id)"
+              >
+                播放
+              </el-button>
+              <el-button 
+                type="danger" 
+                size="small" 
+                @click="removeSongFromPlaylist(song.id)"
+              >
+                移除
+              </el-button>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <template #footer>
+        <el-button @click="closePlaylistDialog">关闭</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -189,46 +301,96 @@ onMounted(() => {
   min-height: 100vh;
 }
 
-/* ======================= 左侧侧边栏 ======================= */
-.sidebar {
-  width: 220px;
-  background: linear-gradient(180deg, #42b983 0%, #369870 100%);
-  color: #fff;
-  padding: 40px 20px;
-  position: sticky;
-  top: 0;
-  height: 100vh;
-  box-sizing: border-box; /* 确保 padding 包含在宽度内 */
-  overflow-x: hidden; /* 防止水平溢出 */
+/* 歌单对话框样式 */
+.playlist-dialog-content {
+  max-height: 60vh;
+  overflow-y: auto;
 }
 
-.sidebar-title {
-  font-size: 22px;
-  font-weight: bold;
-  margin-bottom: 30px;
-  text-align: center;
-}
-
-.sidebar-btn {
-  display: block;
-  width: 100%;
-  padding: 12px 16px; /* 减小左右 padding，防止超出 */
-  margin-bottom: 15px;
-  background: rgba(255, 255, 255, 0.15);
-  border: 1px solid rgba(255, 255, 255, 0.3);
+.playlist-info {
+  margin-bottom: 20px;
+  padding: 15px;
+  background: #f5f5f5;
   border-radius: 8px;
-  color: #fff;
-  font-size: 16px;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  text-align: center;
-  text-decoration: none;
-  box-sizing: border-box; /* 确保 padding 和 border 包含在宽度内 */
 }
 
-.sidebar-btn:hover {
-  background: rgba(255, 255, 255, 0.25);
-  transform: translateX(3px); /* 减小移动距离 */
+.playlist-count {
+  margin: 0;
+  color: #666;
+  font-size: 14px;
+}
+
+.empty-playlist {
+  text-align: center;
+  padding: 60px 20px;
+  color: #999;
+  font-size: 16px;
+}
+
+.playlist-songs {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.song-item {
+  display: flex;
+  align-items: center;
+  padding: 12px;
+  background: #fff;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  transition: all 0.3s ease;
+}
+
+.song-item:hover {
+  box-shadow: 0 2px 8px rgba(66, 185, 131, 0.2);
+  border-color: #42b983;
+}
+
+.song-index {
+  width: 30px;
+  text-align: center;
+  color: #999;
+  font-size: 14px;
+  margin-right: 12px;
+}
+
+.song-cover {
+  width: 50px;
+  height: 50px;
+  border-radius: 6px;
+  object-fit: cover;
+  margin-right: 15px;
+}
+
+.song-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.song-name {
+  font-size: 15px;
+  font-weight: 500;
+  color: #2c3e50;
+  margin-bottom: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.song-artist {
+  font-size: 13px;
+  color: #666;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.song-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
 }
 
 /* ======================= 主体内容区域 ======================= */
@@ -255,44 +417,49 @@ onMounted(() => {
   animation: fadeInDown 0.6s ease;
 }
 
-.search-type-select {
-  padding: 12px 16px;
-  border: 2px solid #42b983;
-  border-radius: 8px;
-  font-size: 16px;
-  cursor: pointer;
-  outline: none;
-}
-
 .search-input {
   flex: 1;
   max-width: 500px;
+}
+
+.search-input :deep(.el-input__wrapper) {
   padding: 12px 20px;
-  border: 2px solid #42b983;
   border-radius: 8px;
   font-size: 16px;
-  outline: none;
+  box-shadow: 0 0 0 2px #42b983 inset;
   transition: all 0.3s ease;
 }
 
-.search-input:focus {
-  border-color: #369870;
-  box-shadow: 0 0 8px rgba(66, 185, 131, 0.3);
+.search-input :deep(.el-input__wrapper:hover) {
+  box-shadow: 0 0 0 2px #369870 inset;
 }
 
-.search-btn {
-  padding: 12px 30px;
-  background: linear-gradient(135deg, #42b983 0%, #369870 100%);
-  border: none;
-  border-radius: 8px;
-  color: white;
+.search-input :deep(.el-input__wrapper.is-focus) {
+  box-shadow: 0 0 0 2px #369870 inset, 0 0 8px rgba(66, 185, 131, 0.3);
+}
+
+.search-input :deep(.el-input__clear) {
+  font-size: 18px;
+}
+
+.search-dropdown {
   font-size: 16px;
   font-weight: bold;
-  cursor: pointer;
+}
+
+.search-dropdown :deep(.el-button) {
+  height: 48px;
+  padding: 12px 20px;
+  font-size: 16px;
+}
+
+.search-dropdown :deep(.el-button--primary) {
+  background: linear-gradient(135deg, #42b983 0%, #369870 100%);
+  border: none;
   transition: all 0.3s ease;
 }
 
-.search-btn:hover {
+.search-dropdown :deep(.el-button--primary:hover) {
   transform: translateY(-2px);
   box-shadow: 0 4px 12px rgba(66, 185, 131, 0.4);
 }
@@ -344,8 +511,14 @@ onMounted(() => {
   color: #666;
 }
 
-.fav-btn {
+.detail-actions {
+  display: flex;
+  gap: 12px;
   margin-top: 15px;
+  flex-wrap: wrap;
+}
+
+.fav-btn {
   padding: 10px 20px;
   background: transparent;
   border: 2px solid #ddd;
@@ -363,6 +536,24 @@ onMounted(() => {
   border-color: #e74c3c;
   background: rgba(231, 76, 60, 0.1);
   color: #e74c3c;
+}
+
+.playlist-btn-detail {
+  padding: 10px 20px;
+  background: white;
+  border: 2px solid #ddd;
+  border-radius: 20px;
+  cursor: pointer;
+  font-size: 16px;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  font-weight: 500;
+}
+
+.playlist-btn-detail:hover {
+  border-color: #42b983;
+  color: #42b983;
 }
 
 /* 动画 */
@@ -391,11 +582,6 @@ onMounted(() => {
   #music-search {
     flex-direction: column;
     justify-content: center;
-  }
-  .sidebar {
-    width: 100%;
-    height: auto;
-    position: relative;
   }
   .search-bar {
     flex-direction: column;

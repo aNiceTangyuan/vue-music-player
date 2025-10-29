@@ -1,31 +1,17 @@
 <template>
-  <div class="favorite-list">
+  <div class="playlist-detail">
     <Sidebar />
 
     <div class="main-content">
-      <h1>❤️ 我喜欢的音乐 ({{ favorites.favoriteCount }})</h1>
-      
-      <div v-if="favorites.cache.length === 0" class="empty">
-        暂无收藏，快去搜索页面添加喜欢的音乐吧！
+      <div v-if="!currentPlaylist" class="empty">
+        歌单不存在或已被删除
       </div>
       
-      <FavoriteMusicList :list="favorites.cache" />
-    </div>
-
-    <!-- 歌单详情对话框 -->
-    <el-dialog 
-      v-model="playlistDialogVisible" 
-      :title="currentPlaylist?.name || '歌单详情'"
-      width="80%"
-      :close-on-click-modal="false"
-    >
-      <div v-if="currentPlaylist" class="playlist-dialog-content">
-        <div class="playlist-info">
-          <p class="playlist-count">共 {{ currentPlaylist.songs.length }} 首歌曲</p>
-        </div>
+      <div v-else>
+        <h1>📝 {{ currentPlaylist.name }} ({{ currentPlaylist.songs.length }})</h1>
         
-        <div v-if="currentPlaylist.songs.length === 0" class="empty-playlist">
-          暂无歌曲，快去添加吧！
+        <div v-if="currentPlaylist.songs.length === 0" class="empty">
+          暂无歌曲，快去搜索页面添加音乐吧！
         </div>
         
         <div v-else class="playlist-songs">
@@ -59,34 +45,26 @@
           </div>
         </div>
       </div>
-      
-      <template #footer>
-        <el-button @click="closePlaylistDialog">关闭</el-button>
-      </template>
-    </el-dialog>
+    </div>
   </div>
 </template>
 
 <script setup>
-import { onMounted, ref } from 'vue'
-import { useRouter } from 'vue-router'
-import { useFavoritesStore } from '@/stores/favoritesStore'
+import { computed, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { usePlaylistStore } from '@/stores/playlistStore'
-import FavoriteMusicList from '../components/FavoriteMusicList.vue'
 import Sidebar from '../components/Sidebar.vue'
 import { ElMessage } from 'element-plus'
 
+const route = useRoute()
 const router = useRouter()
-const favorites = useFavoritesStore()
 const playlistStore = usePlaylistStore()
-const playlistDialogVisible = ref(false) // 歌单对话框显示状态
-const currentPlaylist = ref(null) // 当前选中的歌单
 
-// 关闭歌单对话框
-const closePlaylistDialog = () => {
-  playlistDialogVisible.value = false
-  currentPlaylist.value = null
-}
+// 当前歌单
+const currentPlaylist = computed(() => {
+  const id = parseInt(route.params.id)
+  return playlistStore.getPlaylistById(id)
+})
 
 // 跳转到歌曲详情
 const handleGoDetail = (id) => {
@@ -97,23 +75,36 @@ const handleGoDetail = (id) => {
 const removeSongFromPlaylist = (songId) => {
   if (currentPlaylist.value) {
     playlistStore.removeSongFromPlaylist(currentPlaylist.value.id, songId)
-    // 更新当前歌单引用
-    currentPlaylist.value = playlistStore.getPlaylistById(currentPlaylist.value.id)
     ElMessage.success('已从歌单中移除')
   }
 }
 
-// 生命周期钩子
-onMounted(() => {
-  // 从 localStorage 刷新数据（以防外部修改）
-  favorites.refreshFromStorage()
-})
+// 监听路由参数变化，如果歌单不存在则跳转首页
+watch(() => currentPlaylist.value, (newPlaylist) => {
+  if (route.params.id && !newPlaylist) {
+    ElMessage.warning('歌单不存在')
+    router.push('/')
+  }
+}, { immediate: true })
 </script>
 
 <style scoped>
-.favorite-list {
+.playlist-detail {
   display: flex;
   min-height: 100vh;
+}
+
+/* ======================= 主体内容区域 ======================= */
+.main-content {
+  flex: 1;
+  padding: 40px;
+  background: #f5f5f5;
+  overflow-y: auto;
+}
+
+.main-content h1 {
+  margin-bottom: 30px;
+  color: #2c3e50;
 }
 
 .empty {
@@ -123,67 +114,44 @@ onMounted(() => {
   font-size: 18px;
 }
 
-/* 歌单对话框样式 */
-.playlist-dialog-content {
-  max-height: 60vh;
-  overflow-y: auto;
-}
-
-.playlist-info {
-  margin-bottom: 20px;
-  padding: 15px;
-  background: #f5f5f5;
-  border-radius: 8px;
-}
-
-.playlist-count {
-  margin: 0;
-  color: #666;
-  font-size: 14px;
-}
-
-.empty-playlist {
-  text-align: center;
-  padding: 60px 20px;
-  color: #999;
-  font-size: 16px;
-}
-
 .playlist-songs {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
+  max-width: 1200px;
 }
 
 .song-item {
   display: flex;
   align-items: center;
-  padding: 12px;
+  padding: 15px;
   background: #fff;
   border: 1px solid #e0e0e0;
-  border-radius: 8px;
+  border-radius: 10px;
   transition: all 0.3s ease;
 }
 
 .song-item:hover {
-  box-shadow: 0 2px 8px rgba(66, 185, 131, 0.2);
+  box-shadow: 0 4px 12px rgba(66, 185, 131, 0.2);
   border-color: #42b983;
+  transform: translateY(-2px);
 }
 
 .song-index {
-  width: 30px;
+  width: 40px;
   text-align: center;
   color: #999;
-  font-size: 14px;
-  margin-right: 12px;
+  font-size: 16px;
+  font-weight: 500;
+  margin-right: 15px;
 }
 
 .song-cover {
-  width: 50px;
-  height: 50px;
-  border-radius: 6px;
+  width: 60px;
+  height: 60px;
+  border-radius: 8px;
   object-fit: cover;
-  margin-right: 15px;
+  margin-right: 20px;
 }
 
 .song-info {
@@ -192,17 +160,17 @@ onMounted(() => {
 }
 
 .song-name {
-  font-size: 15px;
-  font-weight: 500;
+  font-size: 16px;
+  font-weight: 600;
   color: #2c3e50;
-  margin-bottom: 4px;
+  margin-bottom: 6px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .song-artist {
-  font-size: 13px;
+  font-size: 14px;
   color: #666;
   white-space: nowrap;
   overflow: hidden;
@@ -211,7 +179,29 @@ onMounted(() => {
 
 .song-actions {
   display: flex;
-  gap: 8px;
+  gap: 10px;
   flex-shrink: 0;
 }
+
+/* 响应式适配 */
+@media (max-width: 768px) {
+  .playlist-detail {
+    flex-direction: column;
+  }
+  
+  .main-content {
+    padding: 20px;
+  }
+  
+  .song-item {
+    flex-wrap: wrap;
+  }
+  
+  .song-actions {
+    width: 100%;
+    margin-top: 10px;
+    justify-content: flex-end;
+  }
+}
 </style>
+

@@ -1,17 +1,23 @@
 <script setup>
 import { ref, watch, onMounted, getCurrentInstance, nextTick } from 'vue'
-import { useRoute, onBeforeRouteUpdate } from 'vue-router'
+import { useRoute, useRouter, onBeforeRouteUpdate } from 'vue-router'
 import { usePlayerStore } from '@/stores/playerStore'
+import { usePlaylistStore } from '@/stores/playlistStore'
 import { searchMusicByIdVkeys, fetchLyricById } from '../api/music'
+import Sidebar from '../components/Sidebar.vue'
+import { ElMessage } from 'element-plus'
 
 const route = useRoute()
-// const router = useRouter()
+const router = useRouter()
 const { proxy } = getCurrentInstance()
 const player = usePlayerStore()
+const playlistStore = usePlaylistStore()
 const music = ref(null)
 const loading = ref(false)
 const error = ref('')
-const selectedQuality = ref(4) 
+const selectedQuality = ref(4)
+const playlistDialogVisible = ref(false) // 歌单对话框显示状态
+const currentPlaylist = ref(null) // 当前选中的歌单 
 const qualityOptions = [
   { value: 1, label: '标准' },
   { value: 2, label: '较高' },
@@ -173,18 +179,18 @@ function parseLRC(lrc) {
 }
 
 function scrollLyric() {
-  nextTick(() => {
-    const container = proxy.$el.querySelector('.lyric-container')
-    const activeLine = proxy.$el.querySelector('.lyric-line.active')
-    if (container && activeLine && !isHoverLyric.value) {
-      const containerHeight = container.clientHeight
-      const lineTop = activeLine.offsetTop
-      const lineHeight = activeLine.clientHeight
-      const scrollTop = lineTop - containerHeight / 2 + lineHeight / 2
-      container.scrollTo({ top: scrollTop, behavior: 'smooth' })
-    }
-  })
+  if (!isHoverLyric.value) {
+    nextTick(() => {
+      const container = proxy.$el.querySelector('.lyric-container')
+      const activeLine = proxy.$el.querySelector('.lyric-line.active')
+      if (container && activeLine) {
+        const offset = activeLine.offsetTop - (container.clientHeight / 2 - activeLine.clientHeight / 2)
+        container.scrollTo({ top: offset, behavior: 'smooth' })
+      }
+    })
+  }
 }
+
 
 watch(() => route.params.id, (newId) => {
   if (newId) fetchAndPlay()
@@ -196,6 +202,35 @@ watch(() => player.currentTime, (newTime) => {
     handleLyric(newTime)
   }
 })
+
+// 监听播放器的歌曲ID变化，自动跳转详情页
+watch(() => player.id, (newPlayerId) => {
+  // 当播放器切换歌曲时，如果新歌曲ID与当前详情页ID不同，则跳转
+  if (newPlayerId && music.value && newPlayerId !== music.value.id) {
+    router.push({ path: `/music/${newPlayerId}` })
+  }
+})
+
+// 关闭歌单对话框
+const closePlaylistDialog = () => {
+  playlistDialogVisible.value = false
+  currentPlaylist.value = null
+}
+
+// 跳转到歌曲详情
+const handleGoDetail = (id) => {
+  router.push({ path: `/music/${id}` })
+}
+
+// 从歌单中删除歌曲
+const removeSongFromPlaylist = (songId) => {
+  if (currentPlaylist.value) {
+    playlistStore.removeSongFromPlaylist(currentPlaylist.value.id, songId)
+    // 更新当前歌单引用
+    currentPlaylist.value = playlistStore.getPlaylistById(currentPlaylist.value.id)
+    ElMessage.success('已从歌单中移除')
+  }
+}
 
 onMounted(() => {
       fetchAndPlay()
@@ -211,11 +246,7 @@ onBeforeRouteUpdate((to, from, next) => {
 
 <template>
   <div class="music-detail">
-    <div class="sidebar">
-      <h2 class="sidebar-title">🎵 音乐世界</h2>
-      <router-link to="/" class="sidebar-btn">🔍 搜索音乐</router-link>
-      <router-link to="/favorites" class="sidebar-btn">❤️ 喜欢的音乐</router-link>
-    </div>
+    <Sidebar />
 
     <div class="main-content">
       <div v-if="loading" class="loading">
@@ -232,7 +263,7 @@ onBeforeRouteUpdate((to, from, next) => {
           </div>
           
           <div class="info-box">
-            <h1 class="song-title">{{ music.singer }}</h1>
+            <h1 class="song-title">{{ music.song }}</h1>
             <p class="sub">歌手：{{ music.ar_name || music.singer }}</p>
             <p class="sub">专辑：{{ music.al_name || music.album }}</p>
             <p class="sub">音质：{{ music.quality }}</p>
@@ -287,6 +318,59 @@ onBeforeRouteUpdate((to, from, next) => {
         </div>
       </div>
     </div>
+
+    <!-- 歌单详情对话框 -->
+    <el-dialog 
+      v-model="playlistDialogVisible" 
+      :title="currentPlaylist?.name || '歌单详情'"
+      width="80%"
+      :close-on-click-modal="false"
+    >
+      <div v-if="currentPlaylist" class="playlist-dialog-content">
+        <div class="playlist-info">
+          <p class="playlist-count">共 {{ currentPlaylist.songs.length }} 首歌曲</p>
+        </div>
+        
+        <div v-if="currentPlaylist.songs.length === 0" class="empty-playlist">
+          暂无歌曲，快去添加吧！
+        </div>
+        
+        <div v-else class="playlist-songs">
+          <div 
+            v-for="(song, index) in currentPlaylist.songs" 
+            :key="song.id"
+            class="song-item"
+          >
+            <div class="song-index">{{ index + 1 }}</div>
+            <img :src="song.cover || song.pic" class="song-cover" />
+            <div class="song-info">
+              <div class="song-name">{{ song.song || song.name }}</div>
+              <div class="song-artist">{{ song.singer || song.ar_name }}</div>
+            </div>
+            <div class="song-actions">
+              <el-button 
+                type="primary" 
+                size="small" 
+                @click="handleGoDetail(song.id)"
+              >
+                播放
+              </el-button>
+              <el-button 
+                type="danger" 
+                size="small" 
+                @click="removeSongFromPlaylist(song.id)"
+              >
+                移除
+              </el-button>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <template #footer>
+        <el-button @click="closePlaylistDialog">关闭</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -297,45 +381,96 @@ onBeforeRouteUpdate((to, from, next) => {
   overflow: hidden; /* 防止整体滚动 */
 }
 
-.sidebar {
-  width: 220px;
-  background: linear-gradient(180deg, #42b983 0%, #369870 100%);
-  color: #fff;
-  padding: 40px 20px;
-  position: sticky;
-  top: 0;
-  height: 100vh; /* 填满屏幕高度 */
-  box-sizing: border-box; /* 确保 padding 包含在宽度内 */
-  overflow-x: hidden; /* 防止水平溢出 */
+/* 歌单对话框样式 */
+.playlist-dialog-content {
+  max-height: 60vh;
+  overflow-y: auto;
 }
 
-.sidebar-title {
-  font-size: 22px;
-  font-weight: bold;
-  margin-bottom: 30px;
-  text-align: center;
-}
-
-.sidebar-btn {
-  display: block;
-  width: 100%;
-  padding: 12px 16px; /* 减小左右 padding，防止超出 */
-  margin-bottom: 15px;
-  background: rgba(255, 255, 255, 0.15);
-  border: 1px solid rgba(255, 255, 255, 0.3);
+.playlist-info {
+  margin-bottom: 20px;
+  padding: 15px;
+  background: #f5f5f5;
   border-radius: 8px;
-  color: #fff;
-  font-size: 16px;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  text-align: center;
-  text-decoration: none;
-  box-sizing: border-box; /* 确保 padding 和 border 包含在宽度内 */
 }
 
-.sidebar-btn:hover {
-  background: rgba(255, 255, 255, 0.25);
-  transform: translateX(3px); /* 减小移动距离 */
+.playlist-count {
+  margin: 0;
+  color: #666;
+  font-size: 14px;
+}
+
+.empty-playlist {
+  text-align: center;
+  padding: 60px 20px;
+  color: #999;
+  font-size: 16px;
+}
+
+.playlist-songs {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.song-item {
+  display: flex;
+  align-items: center;
+  padding: 12px;
+  background: #fff;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  transition: all 0.3s ease;
+}
+
+.song-item:hover {
+  box-shadow: 0 2px 8px rgba(66, 185, 131, 0.2);
+  border-color: #42b983;
+}
+
+.song-index {
+  width: 30px;
+  text-align: center;
+  color: #999;
+  font-size: 14px;
+  margin-right: 12px;
+}
+
+.song-cover {
+  width: 50px;
+  height: 50px;
+  border-radius: 6px;
+  object-fit: cover;
+  margin-right: 15px;
+}
+
+.song-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.song-name {
+  font-size: 15px;
+  font-weight: 500;
+  color: #2c3e50;
+  margin-bottom: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.song-artist {
+  font-size: 13px;
+  color: #666;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.song-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
 }
 
 .main-content {
@@ -566,11 +701,6 @@ onBeforeRouteUpdate((to, from, next) => {
 
 @media (max-width: 768px) {
   .music-detail { flex-direction: column; }
-  .sidebar {
-    width: 100%;
-    height: auto;
-    position: relative;
-  }
   .main-content { 
     min-height: auto; 
     justify-content: flex-start;

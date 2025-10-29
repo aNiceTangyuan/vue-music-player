@@ -1,6 +1,8 @@
 <script setup>
 import { ref, computed, watch, getCurrentInstance, onMounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
+import { ElMessage } from 'element-plus'
+import { usePlayerStore } from '@/stores/playerStore'
 
 // props
 const props = defineProps({
@@ -15,6 +17,8 @@ const props = defineProps({
   }
 })
 const emit = defineEmits(['prev', 'next', 'togglePlayMode', 'play', 'pause', 'timeupdate', 'play-random'])
+
+const playerStore = usePlayerStore()
 
 const audio = ref(null)
 const visible = ref(true)
@@ -47,9 +51,20 @@ const modeLabel = computed(() => {
   }[localPlayMode.value]
 })
 
+const displayLyric = computed(() => {
+  return playerStore.currentLyric || props.artist || '暂无歌词'
+})
+
 watch(() => props.playMode, (newVal) => {
   localPlayMode.value = newVal
 })
+
+// 监听歌曲ID变化，加载歌词
+watch(() => props.musicId, async (newId) => {
+  if (newId) {
+    await playerStore.fetchLyrics(newId)
+  }
+}, { immediate: true })
 
 watch(() => props.src, (newVal) => {
   visible.value = !!newVal
@@ -182,18 +197,36 @@ function toggleMute() {
     audio.value.volume = lastVolume.value
   }
 }
-// function formatTime(seconds) {
-//   if (!seconds || isNaN(seconds)) return '0:00'
-//   const mins = Math.floor(seconds / 60)
-//   const secs = Math.floor(seconds % 60)
-//   return `${mins}:${secs.toString().padStart(2, '0')}`
-// }
+
+function formatTime(seconds) {
+  if (!seconds || isNaN(seconds)) return '0:00'
+  const mins = Math.floor(seconds / 60)
+  const secs = Math.floor(seconds % 60)
+  return `${mins}:${secs.toString().padStart(2, '0')}`
+}
+
 function navigateToDetail() {
   if (props.musicId) router.push(`/music/${props.musicId}`)
 }
 function closePlayer() {
   visible.value = false
   if (audio.value) audio.value.pause()
+}
+
+function handlePrev() {
+  ElMessage({
+    message: '正在加载上一首',
+    type: 'success',
+  })
+  emit('prev')
+}
+
+function handleNext() {
+  ElMessage({
+    message: '正在加载下一首',
+    type: 'success',
+  })
+  emit('next')
 }
 
 onMounted(() => {
@@ -222,13 +255,15 @@ onMounted(() => {
         <img v-if="cover" :src="cover" class="player-cover" />
         <div class="player-meta">
           <div class="player-title">{{ title || '未选择歌曲' }}</div>
-          <div class="player-artist">{{ artist }}</div>
+          <transition name="lyric-fade" mode="out-in">
+            <div class="player-artist" :key="displayLyric">{{ displayLyric }}</div>
+          </transition>
         </div>
       </div>
 
       <!-- 居中播放控制 -->
       <div class="center-controls">
-        <button class="control-btn small-btn" @click="$emit('prev')" :disabled="!src">
+        <button class="control-btn small-btn" @click="handlePrev" :disabled="!src">
           <svg viewBox="0 0 24 24" class="icon">
             <path d="M6 12l10-7v14L6 12zm-2 7h2V5H4v14z" fill="currentColor" />
           </svg>
@@ -243,37 +278,43 @@ onMounted(() => {
           </svg>
         </button>
 
-        <button class="control-btn small-btn" @click="$emit('next')" :disabled="!src">
+        <button class="control-btn small-btn" @click="handleNext" :disabled="!src">
           <svg viewBox="0 0 24 24" class="icon">
             <path d="M18 12L8 19V5l10 7zm2-7h-2v14h2V5z" fill="currentColor" />
           </svg>
         </button>
       </div>
 
-<!-- 播放模式按钮 -->
-<button class="control-btn mode-btn" @click="$emit('togglePlayMode')" :title="modeLabel">
-  <svg v-if="localPlayMode === 'order'" viewBox="0 0 24 24" class="icon icon-small">
-    <!-- 顺序播放图标 -->
-    <!-- 顺序播放 -->
-<path d="M3 12l7-7v14l-7-7zm11 0l7-7v14l-7-7z" fill="currentColor" />
+      <!-- 右侧控制区域 -->
+      <div class="right-controls">
+        <!-- 时间显示 -->
+        <div class="time-display">
+          <span class="current-time">{{ formatTime(isSeeking ? tempTime : currentTime) }}</span>
+          <span class="time-separator">/</span>
+          <span class="total-time">{{ formatTime(duration) }}</span>
+        </div>
 
-  </svg>
+        <!-- 播放模式按钮 -->
+        <button class="control-btn mode-btn" @click="$emit('togglePlayMode')" :title="modeLabel">
+          <svg v-if="localPlayMode === 'order'" viewBox="0 0 24 24" class="icon icon-small">
+            <!-- 顺序播放图标 -->
+            <!-- 顺序播放 -->
+            <path d="M3 12l7-7v14l-7-7zm11 0l7-7v14l-7-7z" fill="currentColor" />
+          </svg>
 
-  <svg v-else-if="localPlayMode === 'random'" viewBox="0 0 24 24" class="icon icon-small">
-    <!-- 随机播放图标 -->
-    <path d="M17 1l4 4-4 4V6h-2.59l-4 4H9l4-4H17V1zM3 9l4 4-4 4V9zm8 6l4-4H17v3l4-4-4-4v3h-2.59l-4 4H11z" fill="currentColor"/>
-  </svg>
+          <svg v-else-if="localPlayMode === 'random'" viewBox="0 0 24 24" class="icon icon-small">
+            <!-- 随机播放图标 -->
+            <path d="M17 1l4 4-4 4V6h-2.59l-4 4H9l4-4H17V1zM3 9l4 4-4 4V9zm8 6l4-4H17v3l4-4-4-4v3h-2.59l-4 4H11z" fill="currentColor"/>
+          </svg>
 
-  <svg v-else viewBox="0 0 24 24" class="icon icon-small">
-    <!-- 单曲循环图标 -->
-    <path d="M7 7v2h6v2H5V7h2zm10 0h2v10h-2v-2h-6v-2h6V7z" fill="currentColor"/>
-  </svg>
-</button>
+          <svg v-else viewBox="0 0 24 24" class="icon icon-small">
+            <!-- 单曲循环图标 -->
+            <path d="M7 7v2h6v2H5V7h2zm10 0h2v10h-2v-2h-6v-2h6V7z" fill="currentColor"/>
+          </svg>
+        </button>
 
-
-
-      <!-- 音量控制 -->
-      <div class="volume-control">
+        <!-- 音量控制 -->
+        <div class="volume-control">
         <button class="control-btn volume-btn" @click="toggleMute">
           <svg v-if="volume > 0.5" viewBox="0 0 24 24" class="icon icon-small">
             <path
@@ -295,19 +336,20 @@ onMounted(() => {
           </svg>
         </button>
 
-        <div class="volume-slider-wrapper">
-          <input
-            type="range"
-            class="volume-slider"
-            min="0"
-            max="100"
-            v-model="volumePercent"
-            @input="changeVolume"
-          />
+          <div class="volume-slider-wrapper">
+            <input
+              type="range"
+              class="volume-slider"
+              min="0"
+              max="100"
+              v-model="volumePercent"
+              @input="changeVolume"
+            />
+          </div>
         </div>
-      </div>
 
-      <button class="player-close" @click="closePlayer">✖</button>
+        <button class="player-close" @click="closePlayer">✖</button>
+      </div>
     </div>
 
     <audio
@@ -329,6 +371,35 @@ onMounted(() => {
 }
 .mode-btn:hover {
   transform: scale(1.1);
+}
+
+/* 时间显示 */
+.time-display {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #2c3e50;
+  font-size: 14px;
+  font-weight: 500;
+  padding: 0 12px;
+  white-space: nowrap;
+  user-select: none;
+}
+
+.current-time {
+  color: #42b983;
+  font-weight: 600;
+  min-width: 40px;
+  text-align: right;
+}
+
+.time-separator {
+  color: #999;
+}
+
+.total-time {
+  color: #666;
+  min-width: 40px;
 }
 
 .global-audio-player {
@@ -399,15 +470,19 @@ onMounted(() => {
 
 /* 主体内容 */
 .player-content {
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  grid-template-areas: 
+    "left center right";
   align-items: center;
-  justify-content: space-between;
   padding: 12px 24px;
   gap: 16px;
+  position: relative;
 }
 
 /* 歌曲信息 */
 .player-info {
+  grid-area: left;
   display: flex;
   align-items: center;
   gap: 12px;
@@ -416,6 +491,15 @@ onMounted(() => {
 
 .player-info.clickable {
   cursor: pointer;
+}
+
+/* 右侧控制区域 */
+.right-controls {
+  grid-area: right;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  justify-content: flex-end;
 }
 
 .player-cover {
@@ -440,13 +524,46 @@ onMounted(() => {
   color: #42b983;
 }
 
+/* 歌词过渡动画 */
+.lyric-fade-enter-active {
+  animation: lyricFadeIn 0.5s ease-out;
+}
+
+.lyric-fade-leave-active {
+  animation: lyricFadeOut 0.3s ease-in;
+}
+
+@keyframes lyricFadeIn {
+  0% {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes lyricFadeOut {
+  0% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+}
+
 /* 居中播放控制 */
 .center-controls {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 20px;
-  flex: 1;
 }
 
 .control-btn {
@@ -518,12 +635,41 @@ onMounted(() => {
 /* 响应式 */
 @media (max-width: 768px) {
   .player-content {
-    flex-wrap: wrap;
-    justify-content: center;
+    grid-template-columns: 1fr;
+    grid-template-areas: 
+      "left"
+      "right";
     gap: 10px;
   }
+  
+  .player-info {
+    justify-content: center;
+    min-width: auto;
+  }
+  
+  .right-controls {
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+  
+  .center-controls {
+    position: static;
+    transform: none;
+    order: -1;
+  }
+  
   .volume-slider-wrapper {
     width: 60px;
+  }
+  
+  .time-display {
+    font-size: 12px;
+    padding: 0 8px;
+  }
+  
+  .current-time,
+  .total-time {
+    min-width: 32px;
   }
 }
 </style>

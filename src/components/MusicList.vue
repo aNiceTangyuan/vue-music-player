@@ -1,6 +1,9 @@
 <script setup>
 import { usePlayerStore } from '@/stores/playerStore'
 import { useFavoritesStore } from '@/stores/favoritesStore'
+import { usePlaylistStore } from '@/stores/playlistStore'
+import { ElMessage } from 'element-plus'
+import { FolderAdd } from '@element-plus/icons-vue'
 
 // 定义 props
 const props = defineProps({
@@ -16,6 +19,7 @@ const emit = defineEmits(['go-detail'])
 // 使用 stores
 const player = usePlayerStore()
 const favorites = useFavoritesStore()
+const playlistStore = usePlaylistStore()
 
 // 处理播放
 const handlePlay = async (item, index) => {
@@ -35,6 +39,17 @@ const goDetail = (id) => {
 // 切换收藏状态
 const toggleFavorite = (item) => {
   favorites.toggle(item)
+}
+
+// 添加歌曲到歌单
+const addToPlaylist = (song, playlistId) => {
+  const success = playlistStore.addSongToPlaylist(playlistId, song)
+  const playlist = playlistStore.getPlaylistById(playlistId)
+  if (success) {
+    ElMessage.success(`已添加到歌单 "${playlist?.name}"`)
+  } else {
+    ElMessage.warning(`歌曲已在歌单 "${playlist?.name}" 中`)
+  }
 }
 </script>
  
@@ -64,6 +79,28 @@ const toggleFavorite = (item) => {
       >
         {{ favorites.isFavorite(item.id) ? '❤️ 已收藏' : '🤍 收藏' }}
       </button>
+      
+      <!-- 加入歌单下拉菜单 -->
+      <el-dropdown trigger="click" @command="(playlistId) => addToPlaylist(item, playlistId)">
+        <button class="playlist-btn">
+          <el-icon style="margin-right: 4px;"><folder-add /></el-icon>
+          加入歌单
+        </button>
+        <template #dropdown>
+          <el-dropdown-menu>
+            <el-dropdown-item v-if="playlistStore.playlists.length === 0" disabled>
+              <span style="color: #999;">暂无歌单，请先创建</span>
+            </el-dropdown-item>
+            <el-dropdown-item 
+              v-for="playlist in playlistStore.playlists" 
+              :key="playlist.id"
+              :command="playlist.id"
+            >
+              📝 {{ playlist.name }} ({{ playlist.songs.length }})
+            </el-dropdown-item>
+          </el-dropdown-menu>
+        </template>
+      </el-dropdown>
     </div>
   </div>
 </template>
@@ -241,6 +278,28 @@ const toggleFavorite = (item) => {
   background: #e74c3c;
   color: white;
   box-shadow: 0 4px 12px rgba(231, 76, 60, 0.3);
+}
+
+.playlist-btn {
+  padding: 10px 16px;
+  background: white;
+  border: 2px solid #e0e0e0;
+  border-radius: 24px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.3s ease;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  margin-left: 12px;
+}
+
+.playlist-btn:hover {
+  border-color: #42b983;
+  color: #42b983;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(66, 185, 131, 0.2);
 }
 
 @keyframes fadeIn {
