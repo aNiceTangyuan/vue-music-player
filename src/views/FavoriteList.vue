@@ -3,7 +3,22 @@
     <Sidebar />
 
     <div class="main-content">
-      <h1>❤️ 我喜欢的音乐 ({{ favorites.favoriteCount }})</h1>
+      <div class="header-section">
+        <div v-if="favorites.cache.length > 0" class="album-cover-container">
+          <img 
+            :src="favorites.cache[0].cover || favorites.cache[0].pic" 
+            alt="专辑封面" 
+            class="header-album-cover"
+          />
+        </div>
+        <div class="header-text">
+          <h1>❤️ 我喜欢的音乐 ({{ favorites.favoriteCount }})</h1>
+          <button class="play-all-btn" @click="playAllMusic">
+            <Icon icon="zondicons:play-outline" style="margin-right: 4px; font-size: 16px;" />
+            播放全部
+          </button>
+        </div>
+      </div>
       
       <div v-if="favorites.cache.length === 0" class="empty">
         暂无收藏，快去搜索页面添加喜欢的音乐吧！
@@ -72,15 +87,27 @@ import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useFavoritesStore } from '@/stores/favoritesStore'
 import { usePlaylistStore } from '@/stores/playlistStore'
+import { usePlayerStore } from '@/stores/playerStore'
 import FavoriteMusicList from '../components/FavoriteMusicList.vue'
 import Sidebar from '../components/Sidebar.vue'
 import { ElMessage } from 'element-plus'
+import { Icon } from '@iconify/vue'
 
 const router = useRouter()
 const favorites = useFavoritesStore()
 const playlistStore = usePlaylistStore()
+const player = usePlayerStore()
 const playlistDialogVisible = ref(false) // 歌单对话框显示状态
 const currentPlaylist = ref(null) // 当前选中的歌单
+
+// 播放全部音乐
+const playAllMusic = () => {
+  if (favorites.cache.length > 0) {
+    player.setPlayList(favorites.cache, 0)
+    player.playByIndex(0)
+    ElMessage.success('开始播放全部音乐')
+  }
+}
 
 // 关闭歌单对话框
 const closePlaylistDialog = () => {
@@ -114,6 +141,61 @@ onMounted(() => {
 .favorite-list {
   display: flex;
   min-height: 100vh;
+}
+
+.header-section {
+  display: flex;
+  align-items: start;
+  gap: 30px;
+  margin-bottom: 30px;
+}
+
+.album-cover-container {
+  flex-shrink: 0;
+}
+
+.header-album-cover {
+  width: 250px;
+  height: 250px;
+  border-radius: 12px;
+  object-fit: cover;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  transition: transform 0.3s ease;
+}
+
+.header-album-cover:hover {
+  transform: scale(1.02);
+}
+
+.header-text {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  height: 250px;
+}
+
+.header-text h1 {
+  margin: 0;
+}
+
+.play-all-btn {
+  padding: 10px 16px;
+  background: linear-gradient(135deg, #42b983 0%, #369870 100%);
+  border: none;
+  border-radius: 20px;
+  color: white;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  font-size: 14px;
+  width: 150px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.play-all-btn:hover {
+  transform: scale(1.05);
+  box-shadow: 0 4px 12px rgba(66, 185, 131, 0.3);
 }
 
 .empty {

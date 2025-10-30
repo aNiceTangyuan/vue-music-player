@@ -2,6 +2,7 @@
 import { useRouter } from 'vue-router'
 import { usePlayerStore } from '@/stores/playerStore'
 import { useFavoritesStore } from '@/stores/favoritesStore'
+import { Icon } from '@iconify/vue'
 
 // 定义 props
 const props = defineProps({
@@ -52,7 +53,8 @@ const handleGoDetail = (id) => {
         <div class="fav-quality">{{ item.quality }}</div>
       </div>
       <button class="play-btn" @click="playGlobal(item, index)">
-        ▶️ 播放
+        <Icon icon="zondicons:play-outline" style="margin-right: 4px; font-size: 16px;" />
+        播放
       </button>
       <button class="unfav-btn" @click="removeFavorite(item.id)">
         💔 取消收藏
@@ -71,6 +73,9 @@ const handleGoDetail = (id) => {
   cursor: pointer;
   margin-right: 10px;
   transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .play-btn:hover {

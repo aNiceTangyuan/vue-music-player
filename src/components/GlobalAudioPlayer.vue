@@ -3,6 +3,7 @@ import { ref, computed, watch, getCurrentInstance, onMounted, nextTick } from 'v
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { usePlayerStore } from '@/stores/playerStore'
+import { Icon } from '@iconify/vue'
 
 // props
 const props = defineProps({
@@ -132,32 +133,34 @@ function togglePlay() {
 
 function onEnded() {
   const mode = localPlayMode.value
-  isPlaying.value = false
   if (mode === 'single') {
     if (audio.value) {
       audio.value.currentTime = 0
       audio.value.play()
     }
-  } else if (mode === 'order') {
-    emit('next')
-  } else if (mode === 'random') {
-    const parent = proxy.$parent
-    if (!parent?.playlist || !Array.isArray(parent.playlist)) {
+  } else {
+    isPlaying.value = false
+    if (mode === 'order') {
       emit('next')
-      return
+    } else if (mode === 'random') {
+      const parent = proxy.$parent
+      if (!parent?.playlist || !Array.isArray(parent.playlist)) {
+        emit('next')
+        return
+      }
+      const playlist = parent.playlist
+      if (playlist.length === 0) return
+      playedSet.value.add(props.musicId)
+      const unplayed = playlist.filter(item => !playedSet.value.has(item.id))
+      let nextSong
+      if (unplayed.length > 0) {
+        nextSong = unplayed[Math.floor(Math.random() * unplayed.length)]
+      } else {
+        playedSet.value.clear()
+        nextSong = playlist[Math.floor(Math.random() * playlist.length)]
+      }
+      emit('play-random', nextSong)
     }
-    const playlist = parent.playlist
-    if (playlist.length === 0) return
-    playedSet.value.add(props.musicId)
-    const unplayed = playlist.filter(item => !playedSet.value.has(item.id))
-    let nextSong
-    if (unplayed.length > 0) {
-      nextSong = unplayed[Math.floor(Math.random() * unplayed.length)]
-    } else {
-      playedSet.value.clear()
-      nextSong = playlist[Math.floor(Math.random() * playlist.length)]
-    }
-    emit('play-random', nextSong)
   }
 }
 
@@ -264,24 +267,16 @@ onMounted(() => {
       <!-- 居中播放控制 -->
       <div class="center-controls">
         <button class="control-btn small-btn" @click="handlePrev" :disabled="!src">
-          <svg viewBox="0 0 24 24" class="icon">
-            <path d="M6 12l10-7v14L6 12zm-2 7h2V5H4v14z" fill="currentColor" />
-          </svg>
+          <Icon icon="mingcute:skip-previous-fill" class="icon" />
         </button>
 
         <button class="control-btn play-pause-btn" @click="togglePlay" :disabled="!src">
-          <svg v-if="!isPlaying" viewBox="0 0 24 24" class="icon">
-            <path d="M8 5v14l11-7z" fill="currentColor" />
-          </svg>
-          <svg v-else viewBox="0 0 24 24" class="icon">
-            <path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z" fill="currentColor" />
-          </svg>
+          <Icon v-if="!isPlaying" icon="ion:play" class="icon" />
+          <Icon v-else icon="lets-icons:stop-fill" class="icon" />
         </button>
 
         <button class="control-btn small-btn" @click="handleNext" :disabled="!src">
-          <svg viewBox="0 0 24 24" class="icon">
-            <path d="M18 12L8 19V5l10 7zm2-7h-2v14h2V5z" fill="currentColor" />
-          </svg>
+          <Icon icon="fluent:next-48-filled" class="icon" />
         </button>
       </div>
 
@@ -296,21 +291,9 @@ onMounted(() => {
 
         <!-- 播放模式按钮 -->
         <button class="control-btn mode-btn" @click="$emit('togglePlayMode')" :title="modeLabel">
-          <svg v-if="localPlayMode === 'order'" viewBox="0 0 24 24" class="icon icon-small">
-            <!-- 顺序播放图标 -->
-            <!-- 顺序播放 -->
-            <path d="M3 12l7-7v14l-7-7zm11 0l7-7v14l-7-7z" fill="currentColor" />
-          </svg>
-
-          <svg v-else-if="localPlayMode === 'random'" viewBox="0 0 24 24" class="icon icon-small">
-            <!-- 随机播放图标 -->
-            <path d="M17 1l4 4-4 4V6h-2.59l-4 4H9l4-4H17V1zM3 9l4 4-4 4V9zm8 6l4-4H17v3l4-4-4-4v3h-2.59l-4 4H11z" fill="currentColor"/>
-          </svg>
-
-          <svg v-else viewBox="0 0 24 24" class="icon icon-small">
-            <!-- 单曲循环图标 -->
-            <path d="M7 7v2h6v2H5V7h2zm10 0h2v10h-2v-2h-6v-2h6V7z" fill="currentColor"/>
-          </svg>
+          <Icon v-if="localPlayMode === 'order'" icon="iconamoon:playlist-repeat-list-bold" class="icon icon-small" />
+          <Icon v-else-if="localPlayMode === 'random'" icon="iconamoon:playlist-shuffle-bold" class="icon icon-small" />
+          <Icon v-else icon="iconamoon:playlist-repeat-song-bold" class="icon icon-small" />
         </button>
 
         <!-- 音量控制 -->
@@ -582,6 +565,24 @@ onMounted(() => {
 
 .control-btn:hover {
   transform: scale(1.1);
+}
+
+.small-btn {
+  background: transparent;
+  box-shadow: none;
+}
+
+.small-btn .icon {
+  color: #42b983;
+}
+
+.small-btn:hover {
+  background: linear-gradient(135deg, #42b983 0%, #369870 100%);
+  box-shadow: 0 4px 10px rgba(66, 185, 131, 0.3);
+}
+
+.small-btn:hover .icon {
+  color: #fff;
 }
 
 .icon {

@@ -4,6 +4,7 @@ import { useFavoritesStore } from '@/stores/favoritesStore'
 import { usePlaylistStore } from '@/stores/playlistStore'
 import { ElMessage } from 'element-plus'
 import { FolderAdd } from '@element-plus/icons-vue'
+import { Icon } from '@iconify/vue'
 
 // 定义 props
 const props = defineProps({
@@ -70,7 +71,8 @@ const addToPlaylist = (song, playlistId) => {
         <div class="music-quality">{{ item.quality }}</div>
       </div>
       <button class="play-btn" @click="handlePlay(item, index)">
-        ▶️ 播放
+        <Icon icon="zondicons:play-outline" style="margin-right: 4px; font-size: 16px;" />
+        播放
       </button>
       <button
         class="fav-btn"
@@ -238,6 +240,9 @@ const addToPlaylist = (song, playlistId) => {
   margin-right: 12px;
   transition: all 0.3s ease;
   box-shadow: 0 4px 12px rgba(66, 185, 131, 0.25);
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .play-btn:hover {
