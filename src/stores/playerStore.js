@@ -103,6 +103,10 @@ export const usePlayerStore = defineStore('playerStore', {
       this.playIndex = startIndex
     },
     
+    setPlaying(playing) {
+      this.isPlaying = playing
+    },
+    
     updateCurrentTime(time) {
       this.currentTime = time
       this.updateCurrentLyric(time)

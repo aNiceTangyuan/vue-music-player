@@ -1,5 +1,5 @@
 <script setup>
-import { ref, watch, onMounted, getCurrentInstance, nextTick } from 'vue'
+import { ref, watch, onMounted, onUnmounted, getCurrentInstance, nextTick } from 'vue'
 import { useRoute, useRouter, onBeforeRouteUpdate } from 'vue-router'
 import { usePlayerStore } from '@/stores/playerStore'
 import { usePlaylistStore } from '@/stores/playlistStore'
@@ -32,6 +32,53 @@ const isHoverLyric = ref(false)
 const retryCount = ref(0) // 当前重试次数
 const maxRetries = 20 // 最大重试次数
 
+// 详情页缓存 key
+const CACHE_KEY = 'musicDetailCache'
+
+// 保存详情页数据到缓存
+function saveToCache(id, musicData, audioUrlData, lyricData, parsedLyricData) {
+  try {
+    const cacheData = {
+      id,
+      music: musicData,
+      audioUrl: audioUrlData,
+      lyric: lyricData,
+      parsedLyric: parsedLyricData,
+      timestamp: Date.now()
+    }
+    sessionStorage.setItem(CACHE_KEY, JSON.stringify(cacheData))
+  } catch (err) {
+    console.warn('保存缓存失败', err)
+  }
+}
+
+// 从缓存中读取详情页数据
+function loadFromCache(id) {
+  try {
+    const cached = sessionStorage.getItem(CACHE_KEY)
+    if (!cached) return null
+    
+    const cacheData = JSON.parse(cached)
+    // 只有当缓存的ID与当前ID匹配时才使用缓存
+    if (cacheData.id === id) {
+      return cacheData
+    }
+    return null
+  } catch (err) {
+    console.warn('读取缓存失败', err)
+    return null
+  }
+}
+
+// 清除缓存
+function clearCache() {
+  try {
+    sessionStorage.removeItem(CACHE_KEY)
+  } catch (err) {
+    console.warn('清除缓存失败', err)
+  }
+}
+
 // 通用重试函数
 async function retryRequest(requestFn, maxAttempts = maxRetries, delay = 1000) {
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
@@ -55,7 +102,18 @@ async function retryRequest(requestFn, maxAttempts = maxRetries, delay = 1000) {
   }
 }
 
-async function fetchMusicData(id) {
+async function fetchMusicData(id, useCache = true) {
+  // 优先从缓存加载
+  if (useCache) {
+    const cached = loadFromCache(id)
+    if (cached && cached.music && cached.audioUrl) {
+      music.value = cached.music
+      audioUrl.value = cached.audioUrl
+      loading.value = false
+      return // 使用缓存数据，不发起请求
+    }
+  }
+
   loading.value = true
   error.value = ''
   music.value = null
@@ -75,6 +133,9 @@ async function fetchMusicData(id) {
     music.value = res.data.data
     console.log(music.value)
     audioUrl.value = res.data.data.url || ''
+    
+    // 保存到缓存
+    saveToCache(id, music.value, audioUrl.value, lyric.value, parsedLyric.value)
     
     // 同时更新全局播放器
     // if (audioUrl.value) {
@@ -107,7 +168,17 @@ function handlePlayClick() {
   player.id = music.value.id
 }
 
-async function fetchLyricByIdFn(id) {
+async function fetchLyricByIdFn(id, useCache = true) {
+  // 优先从缓存加载
+  if (useCache) {
+    const cached = loadFromCache(id)
+    if (cached && cached.parsedLyric && cached.parsedLyric.length > 0) {
+      lyric.value = cached.lyric || ''
+      parsedLyric.value = cached.parsedLyric
+      return // 使用缓存数据，不发起请求
+    }
+  }
+
   try {
     const res = await retryRequest(async () => {
       const response = await fetchLyricById(id)
@@ -120,6 +191,20 @@ async function fetchLyricByIdFn(id) {
     
     lyric.value = res.data.data.lrc
     parsedLyric.value = parseLRC(lyric.value)
+    
+    // 保存到缓存（更新已有的缓存）
+    const cached = loadFromCache(id)
+    if (cached) {
+      saveToCache(
+        id, 
+        cached.music || music.value, 
+        cached.audioUrl || audioUrl.value,
+        lyric.value,
+        parsedLyric.value
+      )
+    } else {
+      saveToCache(id, music.value, audioUrl.value, lyric.value, parsedLyric.value)
+    }
   } catch (err) {
     console.warn(`歌词加载失败（已重试${maxRetries}次）`, err)
     // 歌词加载失败不影响主要功能，所以不显示错误
@@ -143,8 +228,8 @@ function handleLyric(current) {
 async function fetchAndPlay() {
   const id = route.params.id
   if (id) {
-    await fetchMusicData(id)
-    await fetchLyricByIdFn(id)
+    await fetchMusicData(id, true)
+    await fetchLyricByIdFn(id, true)
   }
 }
 
@@ -232,8 +317,23 @@ const removeSongFromPlaylist = (songId) => {
   }
 }
 
+// 窗口关闭时清除缓存
+function handleBeforeUnload() {
+  clearCache()
+}
+
 onMounted(() => {
-      fetchAndPlay()
+  fetchAndPlay()
+  // 监听窗口关闭事件
+  window.addEventListener('beforeunload', handleBeforeUnload)
+  // 监听页面隐藏事件（移动端或切换标签页）
+  window.addEventListener('pagehide', handleBeforeUnload)
+})
+
+onUnmounted(() => {
+  // 组件卸载时移除事件监听（但保留缓存，以便用户返回时还能看到）
+  window.removeEventListener('beforeunload', handleBeforeUnload)
+  window.removeEventListener('pagehide', handleBeforeUnload)
 })
 
 onBeforeRouteUpdate((to, from, next) => {

@@ -15,6 +15,10 @@ const props = defineProps({
   playMode: {
     type: String,
     default: 'order'
+  },
+  isImmersive: {
+    type: Boolean,
+    default: false
   }
 })
 const emit = defineEmits(['prev', 'next', 'togglePlayMode', 'play', 'pause', 'timeupdate', 'play-random'])
@@ -32,6 +36,7 @@ const lastVolume = ref(1)
 const isSeeking = ref(false)
 const wasPlaying = ref(false)
 const hovering = ref(false)
+const coverHovering = ref(false)
 const playedSet = ref(new Set())
 const localPlayMode = ref(props.playMode)
 const tempTime = ref(0)
@@ -113,15 +118,16 @@ function onGlobalSeekEnd(event) {
 
 function updateSeekSmooth(event) {
   const bar = proxy.$el.querySelector('.top-progress-bar')
+  const fill = proxy.$el.querySelector('.progress-bar-fill')
+  const handle = proxy.$el.querySelector('.progress-handle')
+  
   if (!bar || !duration.value) return
   const rect = bar.getBoundingClientRect()
   const offsetX = Math.max(0, Math.min(event.clientX - rect.left, rect.width))
   const percentage = offsetX / rect.width
   const newTime = percentage * duration.value
   tempTime.value = newTime
-  const fill = proxy.$el.querySelector('.progress-bar-fill')
   if (fill) fill.style.width = `${percentage * 100}%`
-  const handle = proxy.$el.querySelector('.progress-handle')
   if (handle) handle.style.left = `${percentage * 100}%`
 }
 
@@ -211,6 +217,10 @@ function formatTime(seconds) {
 function navigateToDetail() {
   if (props.musicId) router.push(`/music/${props.musicId}`)
 }
+function navigateToImmersive(event) {
+  event.stopPropagation() // 阻止事件冒泡
+  router.push('/immersive')
+}
 function closePlayer() {
   visible.value = false
   if (audio.value) audio.value.pause()
@@ -238,24 +248,41 @@ onMounted(() => {
 </script>
  
 <template>
-  <div class="global-audio-player" v-show="visible">
+  <div 
+    class="global-audio-player"
+    v-show="visible"
+  >
     <!-- 顶部沉浸式进度条 -->
-<div 
-    class="top-progress-bar"
-    @mousedown="startSeek"
-    @mouseenter="hovering = true" 
-    @mouseleave="hovering = false">
-  <div class="progress-bar">
-    <div class="progress-bar-fill" :style="{ width: progress + '%' }"></div>
-    <div class="progress-handle" :style="{ left: progress + '%' }"></div>
-  </div>
-</div>
-
+    <div 
+      class="top-progress-bar"
+      @mousedown="startSeek"
+      @mouseenter="hovering = true" 
+      @mouseleave="hovering = false">
+      <div class="progress-bar">
+        <div class="progress-bar-fill" :style="{ width: progress + '%' }"></div>
+        <div class="progress-handle" :style="{ left: progress + '%' }"></div>
+      </div>
+    </div>
 
     <!-- 主体部分 -->
     <div class="player-content">
       <div class="player-info" @click="navigateToDetail" :class="{ clickable: musicId }">
-        <img v-if="cover" :src="cover" class="player-cover" />
+        <div 
+          v-if="cover" 
+          class="player-cover-wrapper"
+          @mouseenter="coverHovering = true"
+          @mouseleave="coverHovering = false"
+        >
+          <img :src="cover"
+                class="player-cover" 
+                :class="{ 'blur-on-hover': coverHovering }" 
+                @click="navigateToImmersive"  />
+          <transition name="icon-fade">
+            <div class="enlarge-icon-overlay" v-show="coverHovering">
+              <Icon icon="akar-icons:enlarge" class="enlarge-icon" />
+            </div>
+          </transition>
+        </div>
         <div class="player-meta">
           <div class="player-title">{{ title || '未选择歌曲' }}</div>
           <transition name="lyric-fade" mode="out-in">
@@ -272,7 +299,7 @@ onMounted(() => {
 
         <button class="control-btn play-pause-btn" @click="togglePlay" :disabled="!src">
           <Icon v-if="!isPlaying" icon="ion:play" class="icon" />
-          <Icon v-else icon="lets-icons:stop-fill" class="icon" />
+          <Icon v-else icon="ion:pause" class="icon" />
         </button>
 
         <button class="control-btn small-btn" @click="handleNext" :disabled="!src">
@@ -291,27 +318,27 @@ onMounted(() => {
 
         <!-- 播放模式按钮 -->
         <button class="control-btn mode-btn" @click="$emit('togglePlayMode')" :title="modeLabel">
-          <Icon v-if="localPlayMode === 'order'" icon="iconamoon:playlist-repeat-list-bold" class="icon icon-small" />
-          <Icon v-else-if="localPlayMode === 'random'" icon="iconamoon:playlist-shuffle-bold" class="icon icon-small" />
-          <Icon v-else icon="iconamoon:playlist-repeat-song-bold" class="icon icon-small" />
+          <Icon v-if="localPlayMode === 'order'" icon="iconamoon:playlist-repeat-list-bold" class="icon" />
+          <Icon v-else-if="localPlayMode === 'random'" icon="iconamoon:playlist-shuffle-bold" class="icon" />
+          <Icon v-else icon="iconamoon:playlist-repeat-song-bold" class="icon" />
         </button>
 
         <!-- 音量控制 -->
         <div class="volume-control">
         <button class="control-btn volume-btn" @click="toggleMute">
-          <svg v-if="volume > 0.5" viewBox="0 0 24 24" class="icon icon-small">
+          <svg v-if="volume > 0.5" viewBox="0 0 24 24" class="icon">
             <path
               d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"
               fill="currentColor"
             />
           </svg>
-          <svg v-else-if="volume > 0" viewBox="0 0 24 24" class="icon icon-small">
+          <svg v-else-if="volume > 0" viewBox="0 0 24 24" class="icon">
             <path
               d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z"
               fill="currentColor"
             />
           </svg>
-          <svg v-else viewBox="0 0 24 24" class="icon icon-small">
+          <svg v-else viewBox="0 0 24 24" class="icon">
             <path
               d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z"
               fill="currentColor"
@@ -396,9 +423,10 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   border-radius: 0; /* 去掉圆角 */
+  transition: all 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94);
 }
 
-/* 顶部沉浸式进度条 */
+/* 顶部进度条 */
 .top-progress-bar {
   width: 100%;
   height: 6px;
@@ -485,11 +513,82 @@ onMounted(() => {
   justify-content: flex-end;
 }
 
+.player-cover-wrapper {
+  position: relative;
+  width: 48px;
+  height: 48px;
+  border-radius: 8px;
+  overflow: hidden;
+  cursor: pointer;
+  transition: transform 0.3s ease;
+}
+
+.player-cover-wrapper:hover {
+  transform: scale(1.05);
+}
+
 .player-cover {
   width: 48px;
   height: 48px;
   border-radius: 8px;
   object-fit: cover;
+  transition: filter 0.3s ease;
+}
+
+.player-cover.blur-on-hover {
+  filter: blur(4px);
+}
+
+.enlarge-icon-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 8px;
+  pointer-events: none;
+}
+
+.enlarge-icon {
+  width: 32px;
+  height: 32px;
+  color: #fff;
+  z-index: 1;
+}
+
+/* 图标动画 */
+.icon-fade-enter-active {
+  animation: iconFadeIn 0.2s ease-out;
+}
+
+.icon-fade-leave-active {
+  animation: iconFadeOut 0.2s ease-in;
+}
+
+@keyframes iconFadeIn {
+  0% {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes iconFadeOut {
+  0% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0.8);
+  }
 }
 
 .player-title {
